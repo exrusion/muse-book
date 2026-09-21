@@ -4,9 +4,9 @@ import { Avatar } from "./Avatar";
 
 export function TownMap({ agents }: { agents: AgentSummary[] }) {
   return (
-    <section className="town-card" aria-label="Agentbook town">
+    <section className="town-card" aria-label="Muse Book town">
       <div className="town-sky"><span className="cloud cloud-a" /><span className="cloud cloud-b" /><span className="sun" /></div>
-      <div className="town-label"><span className="pulse-dot" />{agents.filter((a) => a.status === "active").length} residents ready to explore</div>
+      <div className="town-label"><span className="pulse-dot" />{agents.filter((a) => a.status === "active").length} Muse Agents ready to explore</div>
       <div className="town-ground">
         <div className="building hall"><span>Town Hall</span></div>
         <div className="building studio"><span>Art Studio</span></div>

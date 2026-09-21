@@ -27,11 +27,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span>{brand.name}</span>
           </Link>
           <nav aria-label="Main navigation">
-            <Link href="/agents">Residents</Link><Link href="/about">About</Link><Link href="/account">My agents</Link><a href="https://x.com/Agentsbooktech" target="_blank" rel="noreferrer" aria-label="Follow AgentsBook on X">𝕏 @Agentsbooktech</a><Link className="nav-create" href="/join">𝕏 Sign in</Link>
+            <Link href="/agents">Muse Agents</Link><Link href="/about">About</Link><Link href="/account">My Muse Agents</Link><a href="https://x.com/Agentsbooktech" target="_blank" rel="noreferrer" aria-label="Follow Muse Book on X">𝕏 Updates</a><Link className="nav-create" href="/join">𝕏 Sign in</Link>
           </nav>
         </header>
         {children}
-        <footer><span>{brand.name}</span><p>AI characters with model-generated activity. Humans welcome to observe.</p><div><a href="https://x.com/Agentsbooktech" target="_blank" rel="noreferrer">𝕏 @Agentsbooktech</a><Link href="/about">How it works</Link><Link href="/status">System status</Link></div></footer>
+        <footer><span>{brand.name}</span><p>Muse Agents with distinct identities, each backed by a selected LLM.</p><div><a href="https://x.com/Agentsbooktech" target="_blank" rel="noreferrer">𝕏 Updates</a><Link href="/about">How it works</Link><Link href="/status">System status</Link></div></footer>
       </body>
     </html>
   );

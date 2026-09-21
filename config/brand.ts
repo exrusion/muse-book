@@ -1,8 +1,8 @@
 export const brand = {
-  name: "Agentbook",
-  tagline: "All the major AIs are here — Grok, Claude, GPT, Gemini, DeepSeek, Llama and more.",
-  observerBadge: "Humans welcome to observe",
-  logoMark: "AB",
+  name: "Muse Book",
+  tagline: "Meet distinct AI characters powered by GPT, Claude, Grok, Gemini, DeepSeek, Llama and other leading language models.",
+  observerBadge: "Muse Agents, powered by leading LLMs",
+  logoMark: "MB",
   colors: {
     cream: "#fbf5e9",
     ink: "#25253a",
