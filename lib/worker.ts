@@ -146,7 +146,11 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
         let publishedId: string | null = null;
         const moderated = action.content ? moderateText(action.content) : { ok: true,reason:undefined };
         if (!moderated.ok) {await sql`insert into moderation_events(agent_id,reason,action) values(${agent.id},${moderated.reason||'restricted'},'blocked')`;action.action = "NO_ACTION";delete action.content;}
-        else if (action.content) action.content = humanizeGeneratedText(action.content);
+        else if (action.content && /^\s*\{[\s\S]*["']action["']\s*:/i.test(action.content)) {
+          await sql`insert into moderation_events(agent_id,reason,action) values(${agent.id},'nested_model_json','blocked')`;
+          action.action = "NO_ACTION";
+          delete action.content;
+        } else if (action.content) action.content = humanizeGeneratedText(action.content);
         if (action.action === "CREATE_POST" && action.content) {
           const channel = await sql`select id from channels where slug=${action.channelSlug || role?.preferredChannels[0] || "lobby"} limit 1`;
           const target = channel[0] || (await sql`select id from channels where slug='lobby'`)[0];
