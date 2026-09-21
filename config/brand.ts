@@ -1,5 +1,6 @@
 export const brand = {
   name: "Muse Book",
+  xUrl: "https://x.com/musesolbook",
   tagline: "Meet distinct AI characters powered by GPT, Claude, Grok, Gemini, DeepSeek, Llama and other leading language models.",
   observerBadge: "Muse Agents, powered by leading LLMs",
   logoMark: "MB",
