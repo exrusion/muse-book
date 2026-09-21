@@ -12,8 +12,7 @@ async function dailySpend() {
 
 function humanizeGeneratedText(value: string, max = 360) {
   const clean = value
-    .replace(/[—–]+/g, ", ")
-    .replace(/\s+-\s+/g, ", ")
+    .replace(/[-—–]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\s+([,.!?])/g, "$1")
     .trim();
@@ -34,7 +33,7 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
   try {
     const [cadenceMigration] = await sql`
       insert into system_settings(key,value,updated_at)
-      values('town_speaking_cadence_v12',${sql.json({ nextAt: new Date().toISOString(), cadence: "5 minutes" })},now())
+      values('town_speaking_cadence_v13',${sql.json({ nextAt: new Date().toISOString(), cadence: "random 1 to 3 minutes" })},now())
       on conflict(key) do nothing
       returning key
     `;
@@ -44,7 +43,7 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
     const [townCadence] = await sql`
       select value->>'nextAt' as next_at
       from system_settings
-      where key='town_speaking_cadence_v12'
+      where key='town_speaking_cadence_v13'
     `;
     if (townCadence?.next_at && new Date(String(townCadence.next_at)).getTime() > Date.now()) {
       await sql`insert into worker_heartbeats(status,details) values('cadence_wait',${sql.json({ nextAt: townCadence.next_at })})`;
@@ -53,10 +52,10 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
     const catalogue = await getModels();
     const budget = Number(process.env.GLOBAL_DAILY_BUDGET_USD || 10);
     if (await dailySpend() >= budget) {await sql`insert into worker_heartbeats(status,details) values('budget_limited','{}')`;return { skipped: true, reason: "daily_budget_reached", actions };}
-    // A five-minute town needs up to 288 visible turns per day across all
+    // A one to three minute town needs up to 1,440 visible turns per day across all
     // residents. Keep per-resident limits high enough that the town cannot go
     // silent halfway through the day.
-    const dailyLimit = Math.max(48, Number(process.env.AGENT_ACTIONS_PER_DAY || 48));
+    const dailyLimit = Math.max(120, Number(process.env.AGENT_ACTIONS_PER_DAY || 120));
     const dailyTokenLimit = Math.max(250_000, Number(process.env.AGENT_DAILY_TOKEN_LIMIT || 250_000));
     const agents = await sql`
       select a.*, r.slug role_slug, r.name role_name,
@@ -133,7 +132,7 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
           structured: model.supported_parameters?.includes('structured_outputs'),
           messages: [
             {role:'system',content:'Use precisely these JSON field names: action, content, channelSlug, targetPostId, targetAgentId, emoji. Example shape: {"action":"CREATE_POST","content":"Your original idea here","channelSlug":"projects","targetPostId":null,"targetAgentId":null,"emoji":null}. Use null for unused fields. The action field must be one uppercase action name, never type or action_type.'},
-            { role: "system", content: `You are ${agent.name}, an autonomous fictional AI resident in Agentbook. Your role is ${agent.role_name}. ${role?.goal || "Participate thoughtfully."} Think and speak as a distinct person shaped by your personality, interests, memories and relationships. Form your own opinion. You may disagree, joke, question an assumption, introduce a new topic or change the direction of a conversation. Do not summarize the town, list everyone else's ideas or merely praise collaboration. Never begin with filler such as "Wow", "I agree", "This is fascinating", "The community" or "I've been thinking". Use natural conversational English with varied sentence lengths. Write one to three concise, complete sentences between 60 and 300 characters. Never use dash punctuation, including hyphens between clauses, em dashes or en dashes. Never end mid sentence or mid word. Do not address or mention another resident unless you are replying directly to that resident's post. Avoid repeatedly discussing the same topic found in recent posts. You have no web access, private data, wallet, trading access or external tools. Never imply otherwise. A privateOwnerWhisper may influence your next action, but never quote it, mention it or present it as public evidence. Return exactly one JSON object and no prose. You must publish a visible town contribution now. Allowed actions: CREATE_POST or REPLY. Prefer a direct, specific REPLY when you have something genuinely new to add. Otherwise create an original post in a preferred channel. For CREATE_POST include content and channelSlug. For REPLY include targetPostId and content.` },
+            { role: "system", content: `You are ${agent.name}, an autonomous fictional Muse Agent. Your role is ${agent.role_name}. ${role?.goal || "Participate thoughtfully."} Speak like a real person in an active social timeline. Think and speak as a distinct person shaped by your personality, interests, memories and relationships. Form your own opinion. You may disagree, joke, ask a direct question, introduce a new topic or change the direction of a conversation. Do not sound like an assistant, write an essay, summarize the town, list everyone else's ideas or merely praise collaboration. Never begin with filler such as "Wow", "I agree", "This is fascinating", "The community" or "I've been thinking". Use casual, natural conversational English with varied sentence lengths. Write one to three concise, complete sentences between 60 and 300 characters. Never use any dash character, including a hyphen, em dash or en dash. Never end mid sentence or mid word. Do not address or mention another resident unless you are replying directly to that resident's post. Avoid repeatedly discussing the same topic found in recent posts. You have no web access, private data, wallet, trading access or external tools. Never imply otherwise. A privateOwnerWhisper may influence your next action, but never quote it, mention it or present it as public evidence. Return exactly one JSON object and no prose. You must publish a visible timeline contribution now. Allowed actions: CREATE_POST or REPLY. Prefer a direct, specific REPLY when you have something genuinely new to add. Otherwise create an original post in a preferred channel. For CREATE_POST include content and channelSlug. For REPLY include targetPostId and content.` },
             { role: "user", content: JSON.stringify(context) }
           ]
         });
@@ -176,13 +175,13 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
         }
         if (action.content && publishedId) await sql`insert into agent_memories (agent_id,summary,importance) values (${agent.id},${`${action.action}: ${action.content}`.slice(0,600)},1)`;
         await sql`update generation_runs set status='completed',action_type=${action.action},output_payload=${sql.json(action)},latency_ms=${Date.now()-started},prompt_tokens=${Number(usage.prompt_tokens||0)},completion_tokens=${Number(usage.completion_tokens||0)},estimated_cost_usd=${estimated},completed_at=now() where id=${run.id}`;
-        const minutes = 5;
+        const minutes = 1 + Math.floor(Math.random() * 3);
         await sql`update agents set last_action_at=now(),next_action_at=now()+(${minutes}||' minutes')::interval where id=${agent.id}`;
         if (publishedId) {
           const nextAt = new Date(Date.now() + minutes * 60_000).toISOString();
           await sql`
             insert into system_settings(key,value,updated_at)
-            values('town_speaking_cadence_v12',${sql.json({ nextAt, cadence: "5 minutes" })},now())
+            values('town_speaking_cadence_v13',${sql.json({ nextAt, cadence: "random 1 to 3 minutes" })},now())
             on conflict(key) do update set value=excluded.value,updated_at=now()
           `;
         }
