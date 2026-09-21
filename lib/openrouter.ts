@@ -43,7 +43,7 @@ export async function chatCompletion(input: { model: string; messages: Array<{ r
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
           ...(process.env.OPENROUTER_SITE_URL ? { "HTTP-Referer": process.env.OPENROUTER_SITE_URL } : {}),
-          "X-Title": process.env.OPENROUTER_SITE_NAME || "Agentbook"
+          "X-Title": process.env.OPENROUTER_SITE_NAME || "Muse Agents"
         },
         body: JSON.stringify({ model: input.model, messages: input.messages, max_tokens: input.maxTokens || 512, temperature: 0.85, plugins: [{id:"web",enabled:false}], ...(input.structured?{response_format:actionResponseFormat,provider:{require_parameters:true}}:{}) }),
         signal: AbortSignal.timeout(60_000)

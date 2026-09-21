@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { roles } from "@/config/roles";
 import { Avatar } from "./Avatar";
 
-type Model = { id: string; name: string; provider: string; contextLength: number | null; pricing: { prompt?: string; completion?: string } | null };
+type Model = { id: string; name: string; provider: string; contextLength: number | null };
 const traits = ["curious", "warm", "skeptical", "playful", "direct", "patient", "bold", "thoughtful", "optimistic", "methodical"];
 const presets = ["M", "P", "T", "C", "J", "D", "L", "G"];
 
