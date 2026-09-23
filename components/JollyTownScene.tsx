@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { places, placeFor, residentOffset, type TownResident, type PlaceId } from "@/lib/jolly-town-shared";
 import { JollyPlush } from "./JollyPlush";
+import type { TownMotion } from "./useTownMovement";
 import styles from "./JollyTown.module.css";
 
 // Merge the city by material: hundreds of windows and trees become a few draw calls.
@@ -107,26 +108,36 @@ function City() {
   useEffect(() => () => meshes.forEach(m => m.geometry.dispose()), [meshes]);
   return <group>{meshes.map(m => <mesh key={m.color} geometry={m.geometry} castShadow receiveShadow><meshStandardMaterial color={m.color} roughness={0.85} /></mesh>)}</group>;
 }
-function Neighbor({ resident, selected, onSelect, speaking, speechLevel, reduced }: { resident: TownResident; selected: boolean; onSelect: () => void; speaking: boolean; speechLevel: RefObject<number>; reduced: boolean }) {
+function Neighbor({ resident, selected, onSelect, speaking, speechLevel, reduced, motion, mine }: { resident: TownResident; selected: boolean; onSelect: () => void; speaking: boolean; speechLevel: RefObject<number>; reduced: boolean; motion:TownMotion; mine:boolean }) {
   const root = useRef<THREE.Group>(null), silent = useRef(0);
+  const character=useRef<THREE.Group>(null),gait=useRef({moving:false});
   const p = placeFor(resident.place), offset = residentOffset(resident.id);
   const initial = useRef<[number,number,number]>([p.x + offset[0], 0.91, p.z + offset[1]]);
   useFrame(({ clock }, delta) => {
     if (!root.current) return;
+    const live=mine?motion.local.current:motion.poses.current.get(resident.id);
+    if(live&&resident.kind==="member"){
+      const fresh=mine||performance.now()-(motion.poses.current.get(resident.id)?.receivedAt||0)<1500;
+      gait.current.moving=live.moving&&live.online&&fresh;
+      root.current.position.x=mine?live.x:THREE.MathUtils.damp(root.current.position.x,live.x,16,delta);
+      root.current.position.z=mine?live.z:THREE.MathUtils.damp(root.current.position.z,live.z,16,delta);
+      if(character.current){const a=character.current.rotation.y;const difference=Math.atan2(Math.sin(live.yaw-a),Math.cos(live.yaw-a));character.current.rotation.y+=difference*(1-Math.exp(-15*delta));}
+      return;
+    }
     const wander = resident.kind === "agent" && !selected && !reduced ? Math.sin(clock.elapsedTime * 0.18 + offset[0]) * 0.65 : 0;
     root.current.position.x = THREE.MathUtils.damp(root.current.position.x, p.x + offset[0] + wander, 2.5, delta);
     root.current.position.z = THREE.MathUtils.damp(root.current.position.z, p.z + offset[1], 2.5, delta);
   });
   return <group ref={root} position={initial.current} onClick={e => { e.stopPropagation(); onSelect(); }}>
-    <group scale={0.48} rotation={[0, 0.45, 0]}>
-      <JollyPlush detail="town" state={speaking ? "speaking" : selected ? "happy" : "idle"} onTap={onSelect} speechLevel={speaking ? speechLevel : silent} />
+    <group ref={character} scale={0.48} rotation={[0, 0.45, 0]}>
+      <JollyPlush detail="town" state={speaking ? "speaking" : selected&&!mine ? "happy" : "idle"} onTap={onSelect} speechLevel={speaking ? speechLevel : silent} locomotion={gait} />
       <mesh position={[0, 0.24, 0.43]}><sphereGeometry args={[0.105, 12, 8]} /><meshStandardMaterial color={resident.accent} /></mesh>
     </group>
     {selected && <mesh rotation={[-Math.PI / 2,0,0]} position={[0,-0.65,0]}><ringGeometry args={[0.55,0.64,40]} /><meshBasicMaterial color={resident.accent} /></mesh>}
     <Html position={[0,0.9,0]} center distanceFactor={28} zIndexRange={[12,1]}><button className={`${styles.nameTag} ${selected ? styles.selectedTag : ""}`} onClick={e => { e.stopPropagation(); onSelect(); }}><i style={{ background: resident.accent }} />{resident.name}{resident.kind === "member" && resident.online && <span className={styles.onlineDot} />}</button></Html>
   </group>;
 }
-function CameraRig({ focus, zoom, reset }: { focus: PlaceId | null; zoom: number; reset: number }) {
+function CameraRig({ focus, zoom, reset, motion }: { focus: PlaceId | null; zoom: number; reset: number; motion:TownMotion }) {
   const controls = useRef<Controls>(null);
   useEffect(() => {
     if (!controls.current) return;
@@ -137,18 +148,29 @@ function CameraRig({ focus, zoom, reset }: { focus: PlaceId | null; zoom: number
     controls.current.update();
   }, [focus, reset]);
   const lastZoom = useRef(zoom);
+  useFrame((_,delta)=>{
+    const control=controls.current;if(!control)return;
+    const offsetX=control.object.position.x-control.target.x,offsetZ=control.object.position.z-control.target.z;
+    motion.heading.current=Math.atan2(offsetX,offsetZ);
+    if(motion.walking&&motion.local.current){
+      const x=THREE.MathUtils.damp(control.target.x,motion.local.current.x,4,delta)-control.target.x;
+      const z=THREE.MathUtils.damp(control.target.z,motion.local.current.z,4,delta)-control.target.z;
+      control.target.x+=x;control.target.z+=z;control.object.position.x+=x;control.object.position.z+=z;
+      control.update();
+    }
+  });
   useEffect(() => { if (zoom === lastZoom.current) return; if (controls.current) { const camera = controls.current.object; camera.position.sub(controls.current.target).multiplyScalar(zoom > lastZoom.current ? 0.8 : 1.25).add(controls.current.target); controls.current.update(); } lastZoom.current = zoom; }, [zoom]);
-  return <OrbitControls ref={controls} makeDefault minDistance={7} maxDistance={65} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2.2} enableDamping dampingFactor={0.08} />;
+  return <OrbitControls ref={controls} makeDefault minDistance={7} maxDistance={65} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2.2} enablePan={!motion.walking} enableDamping dampingFactor={0.08} />;
 }
-export default function JollyTownScene({ residents, selected, onSelect, onPlace, focus, zoom, reset, night, speaking, speechLevel, onFail }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; focus: PlaceId | null; zoom: number; reset: number; night: boolean; speaking: boolean; speechLevel: RefObject<number>; onFail: () => void }) {
+export default function JollyTownScene({ residents, selected, onSelect, onPlace, focus, zoom, reset, night, speaking, speechLevel, onFail, motion, meId }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; focus: PlaceId | null; zoom: number; reset: number; night: boolean; speaking: boolean; speechLevel: RefObject<number>; onFail: () => void; motion:TownMotion; meId?:string }) {
   const reduced = useRef(false);
   const [mobile, setMobile] = useState(false);
   useEffect(() => { reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches; setMobile(window.innerWidth < 700); }, []);
   const shown = useMemo(() => {
-    const chosen = residents.find(r => r.id === selected);
-    const nearby = residents.filter(r => r.id !== selected).sort((a,b) => Number(b.place === focus) - Number(a.place === focus));
-    return [...nearby.slice(0, mobile ? 8 : 15), ...(chosen ? [chosen] : [])];
-  }, [residents, selected, focus, mobile]);
+    const chosen = residents.filter(r => r.id === selected || r.id === meId);
+    const nearby = residents.filter(r => !chosen.includes(r)).sort((a,b) => Number(b.kind === "member"&&b.online)*2-Number(a.kind === "member"&&a.online)*2+Number(b.place === focus)-Number(a.place === focus));
+    return [...nearby.slice(0, mobile ? 10 : 22), ...chosen];
+  }, [residents, selected, focus, mobile, meId]);
   return <Canvas shadows dpr={[1,1.5]} camera={{ position: [22,25,31], fov: 43, near: 0.1, far: 160 }} gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: night ? 0.85 : 1.08 }} onCreated={({gl}) => { gl.domElement.addEventListener("webglcontextlost", onFail, { once: true }); }} aria-label="Interactive 3D Jolly Town. Drag to orbit, pinch or scroll to zoom.">
     <color attach="background" args={[night ? "#252a4b" : "#c9e2e3"]} />
     <fog attach="fog" args={[night ? "#252a4b" : "#c9e2e3", 58, 115]} />
@@ -158,7 +180,7 @@ export default function JollyTownScene({ residents, selected, onSelect, onPlace,
     <mesh rotation={[-Math.PI/2,0,0]} position={[0,-0.5,0]} receiveShadow><planeGeometry args={[180,180]} /><meshStandardMaterial color={night ? "#3d6280" : "#9acbd4"} roughness={0.35} metalness={0.15} /></mesh>
     <City />
     {places.map(p => <Html key={p.id} position={[p.x,2.6,p.z]} center distanceFactor={43} zIndexRange={[10,1]}><button className={styles.placeTag} onClick={() => onPlace(p.id)}><span style={{color:p.color}}>{p.icon}</span>{p.name}</button></Html>)}
-    {shown.map(r => <Neighbor key={r.id} resident={r} selected={selected === r.id} onSelect={() => onSelect(r.id)} speaking={r.id === "jolly" && speaking} speechLevel={speechLevel} reduced={reduced.current} />)}
-    <CameraRig focus={focus} zoom={zoom} reset={reset} />
+    {shown.map(r => <Neighbor key={r.id} resident={r} selected={selected === r.id} onSelect={() => onSelect(r.id)} speaking={r.id === "jolly" && speaking} speechLevel={speechLevel} reduced={reduced.current} motion={motion} mine={r.id===meId} />)}
+    <CameraRig focus={focus} zoom={zoom} reset={reset} motion={motion} />
   </Canvas>;
 }

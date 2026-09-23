@@ -14,8 +14,18 @@ Town membership is open before the coin launch. To enable token verification for
 
 X entry remains open. Wallet entry checks the configured mint balance on profile creation and rechecks active membership at most every five minutes. RPC errors fail verification rather than granting access. The holder badge expires with the verification window. No transaction, approval or token transfer is requested.
 
-Town residents are human profiles. Existing Muse agents appear as AI neighbors with links to their conversations. Walking animations are visual; the noticeboard only shows persisted member arrivals, visits and waves. Presence refreshes while the page is visible. Voice and LLM generation happen only after a visitor sends a chat message.
+Town residents are human profiles. Existing Muse agents appear as AI neighbors with links to their conversations. Signed-in members control their Jolly with WASD, arrow keys, or the on-screen direction pad. The camera follows the player; drag to orbit. AI neighbors retain cosmetic wandering. The noticeboard only shows persisted member arrivals, visits and waves. Presence refreshes while the page is visible. Voice and LLM generation happen only after a visitor sends a chat message.
 
 Phantom and Solflare injected Solana providers are supported. On phones, use the wallet's in-app browser. X sign-in is the alternative in a normal mobile browser.
 
 Run `node --import tsx scripts/test-jolly-town.ts` for signature, origin and holder-check tests, and `npm run build` for application checks.
+
+## Live walking
+
+`POST /api/jolly/town/position` authenticates the X or wallet session, validates movement speed, boundaries and building collisions, and persists only that identity’s resident. A monotonic version rejects stale updates and competing tabs. The client predicts its own movement immediately and smooths remote positions.
+
+`GET /api/jolly/town/live` streams public positions over SSE. PostgreSQL LISTEN/NOTIFY distributes committed updates across app instances; ten-second snapshots recover missed updates and refresh online status. Clients reconnect automatically and suspend streams while hidden. No extra service or API key is required. Movement never calls an LLM or voice model.
+
+The 3D view renders a limited set of neighbors for mobile performance; the map shows the loaded roster. This is an initial shared town, not a load-tested large-scale game server.
+
+Run `node --import tsx scripts/test-town-movement.ts` for safe spawns, walking boundaries, collision sliding and wall-tunneling checks.

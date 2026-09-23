@@ -129,9 +129,10 @@ function Fur({ geometry, count, maskFace = false }: { geometry: THREE.BufferGeom
   </group>;
 }
 
-export function JollyPlush({ state, onTap, speechLevel, detail = "full" }: { state: Mood; onTap: () => void; speechLevel: RefObject<number>; detail?: "full" | "town" }) {
+export function JollyPlush({ state, onTap, speechLevel, detail = "full", locomotion }: { state: Mood; onTap: () => void; speechLevel: RefObject<number>; detail?: "full" | "town"; locomotion?:RefObject<{moving:boolean}> }) {
   const root = useRef<THREE.Group>(null), left = useRef<THREE.Group>(null), right = useRef<THREE.Group>(null);
   const eyes = useRef<THREE.Group>(null), mouth = useRef<THREE.Group>(null), smile = useRef<THREE.Mesh>(null);
+  const leftFoot=useRef<THREE.Group>(null),rightFoot=useRef<THREE.Group>(null);
   const { pointer, size } = useThree();
   const reducedMotion = useRef(false);
   const models = useMemo(() => ({
@@ -155,6 +156,16 @@ export function JollyPlush({ state, onTap, speechLevel, detail = "full" }: { sta
     root.current.rotation.z = THREE.MathUtils.damp(root.current.rotation.z, state === "thinking" ? 0.045 : Math.sin(t * 0.8) * 0.008 * motion, 3, delta);
     left.current.rotation.z = -0.3 + Math.sin(t * 1.7) * 0.02 * motion;
     right.current.rotation.z = 0.3 + Math.sin(t * (happy ? 7 : 1.7)) * (happy ? 0.15 : 0.02) * motion;
+    const walking=locomotion?.current.moving===true;
+    const stride=walking?Math.sin(t*11)*0.38*motion:0;
+    left.current.rotation.x=THREE.MathUtils.damp(left.current.rotation.x,-stride,14,delta);
+    right.current.rotation.x=THREE.MathUtils.damp(right.current.rotation.x,stride,14,delta);
+    if(leftFoot.current&&rightFoot.current){
+      leftFoot.current.rotation.x=stride;rightFoot.current.rotation.x=-stride;
+      leftFoot.current.position.y=-1.085+Math.max(0,stride)*0.16;
+      rightFoot.current.position.y=-1.085+Math.max(0,-stride)*0.16;
+    }
+    if(walking)root.current.position.y+=Math.abs(Math.sin(t*11))*0.035*motion;
     // Blink closes and reopens without stretching the eyes above their rest size.
     const blink = t % 4.8;
     eyes.current.scale.y = blink < 0.18 ? Math.max(0.06, Math.abs(blink - 0.09) / 0.09) : 1;
@@ -191,7 +202,7 @@ export function JollyPlush({ state, onTap, speechLevel, detail = "full" }: { sta
       <Fur geometry={models.arm} count={limbDensity} />
       <group position={[-0.1, -0.08, 0.2]}><Fur geometry={models.hand} count={handDensity} /></group>
     </group>
-    {[-0.34, 0.34].map(x => <group key={x} position={[x, -1.085, 0.045]}><Fur geometry={models.foot} count={limbDensity} /></group>)}
+    {[-0.34, 0.34].map(x => <group key={x} ref={x<0?leftFoot:rightFoot} position={[x, -1.085, 0.045]}><Fur geometry={models.foot} count={limbDensity} /></group>)}
   </group>;
 }
 

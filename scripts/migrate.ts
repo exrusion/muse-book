@@ -121,6 +121,12 @@ async function main() {
         holder_checked_at timestamptz not null default now(),
         last_seen timestamptz not null default now(), created_at timestamptz not null default now()
       );
+      alter table jolly_town_residents add column if not exists pos_x double precision;
+      alter table jolly_town_residents add column if not exists pos_z double precision;
+      alter table jolly_town_residents add column if not exists yaw double precision not null default 0;
+      alter table jolly_town_residents add column if not exists moving boolean not null default false;
+      alter table jolly_town_residents add column if not exists motion_seq integer not null default 0;
+      alter table jolly_town_residents add column if not exists last_motion_at timestamptz;
       create table if not exists jolly_town_events (
         id uuid primary key default gen_random_uuid(), resident_id uuid not null references jolly_town_residents(id) on delete cascade,
         action text not null, place text not null, created_at timestamptz not null default now()

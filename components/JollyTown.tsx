@@ -5,6 +5,8 @@ import { Component, useCallback, useEffect, useRef, useState, type CSSProperties
 import { accents, guide, places, placeFor, residentOffset, type PlaceId, type TownEvent, type TownResident } from "@/lib/jolly-town-shared";
 import { useJollyVoice } from "./useJollyVoice";
 import styles from "./JollyTown.module.css";
+import { useTownMovement, type TownMotion } from "./useTownMovement";
+import { TownWalkingControls } from "./TownWalkingControls";
 
 const TownScene = dynamic(() => import("./JollyTownScene"), { ssr: false, loading: () => <div className={styles.loading}>Opening the gates…</div> });
 type TownData = { residents: TownResident[]; me: TownResident | null; identity: { name: string; type: "wallet" | "x" } | null; events: TownEvent[]; memberCount: number; tokenConfigured: boolean; xLoginUrl: string | null };
@@ -23,7 +25,12 @@ class SceneBoundary extends Component<{ children: ReactNode; onFail: () => void 
 function Face({ color = accents[0], large = false }: { color?: string; large?: boolean }) {
   return <span className={`${styles.face} ${large ? styles.largeFace : ""}`} style={{ "--accent": color } as CSSProperties} aria-hidden="true"><span><i /><i /><b /></span></span>;
 }
-function TownMap({ residents, selected, onSelect, onPlace, large = false }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; large?: boolean }) {
+function MapResident({resident,selected,onSelect,motion}:{resident:TownResident;selected:string;onSelect:(id:string)=>void;motion:TownMotion}) {
+  const circle=useRef<SVGCircleElement>(null),p=placeFor(resident.place),offset=residentOffset(resident.id);
+  useEffect(()=>{let frame=0;const tick=()=>{const pose=motion.local.current?.id===resident.id?motion.local.current:motion.poses.current.get(resident.id);if(pose&&circle.current){circle.current.setAttribute("cx",String(180+pose.x*10));circle.current.setAttribute("cy",String(150+pose.z*10));}frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);},[resident.id,motion.local,motion.poses]);
+  return <circle ref={circle} role="button" tabIndex={0} aria-label={resident.name} onClick={()=>onSelect(resident.id)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onSelect(resident.id);}}} cx={180+(p.x+offset[0])*10} cy={150+(p.z+offset[1])*10} r={selected===resident.id?5:3.2} fill={resident.accent} stroke={selected===resident.id?"#33324c":"#fff8e9"} strokeWidth="1.5"/>;
+}
+function TownMap({ residents, selected, onSelect, onPlace, motion, large = false }: { motion:TownMotion; residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; large?: boolean }) {
   return <svg viewBox="0 0 360 330" className={large ? styles.fullMap : styles.miniMap} role="group" aria-label="Town map. Select a neighborhood or resident.">
     <rect width="360" height="330" rx="22" fill="#a9d4db" />
     <rect x="13" y="12" width="334" height="295" rx="19" fill="#dddbc6" />
@@ -37,7 +44,7 @@ function TownMap({ residents, selected, onSelect, onPlace, large = false }: { re
     <rect x="171" y="286" width="18" height="35" rx="3" fill="#cba885" />
     {[[40,92],[100,89],[157,197],[202,197],[270,153],[304,135],[303,188],[40,211],[325,276]].map(([x,y],i) => <circle key={i} cx={x} cy={y} r={i%2?6:8} fill={i>3&&i<7?"#dcaebf":"#87ac8f"} stroke="#adcba1" strokeWidth="3" />)}
     {places.map(p => <g key={p.id} role="button" tabIndex={0} aria-label={p.name} onClick={() => onPlace(p.id)} onKeyDown={e => { if(e.key === "Enter" || e.key === " ") { e.preventDefault(); onPlace(p.id); } }} className={styles.mapTarget}><circle cx={180+p.x*10} cy={150+p.z*10} r="15" fill={p.color} stroke="#fff7e7" strokeWidth="3" /><text x={180+p.x*10} y={155+p.z*10} textAnchor="middle" fontSize="15" fill="#fff">{p.icon}</text>{large && <text x={180+p.x*10} y={180+p.z*10} textAnchor="middle" fontSize="7" fontWeight="700" fill="#425654">{p.name}</text>}</g>)}
-    {residents.slice(0,40).map(r => { const p = placeFor(r.place), offset = residentOffset(r.id); return <circle key={r.id} role="button" tabIndex={0} aria-label={r.name} onClick={() => onSelect(r.id)} onKeyDown={e => { if(e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(r.id); } }} cx={180+(p.x+offset[0])*10} cy={150+(p.z+offset[1])*10} r={selected===r.id?5:3.2} fill={r.accent} stroke={selected===r.id?"#33324c":"#fff8e9"} strokeWidth="1.5" />; })}
+    {residents.map(r=><MapResident key={r.id} resident={r} selected={selected} onSelect={onSelect} motion={motion}/>)}
   </svg>;
 }
 function JoinDialog({ data, onClose, onSaved, onRefresh, onError }: { data: TownData | null; onClose: () => void; onSaved: (resident: TownResident) => void; onRefresh: () => Promise<void>; onError: (message: string) => void }) {
@@ -110,6 +117,9 @@ export function JollyTown() {
     try { const result = await api("/api/jolly/town"); if(mounted.current && sequence===refreshSequence.current) { setData(result); setLoadError(""); } }
     catch(err) { if(mounted.current && sequence===refreshSequence.current) setLoadError(err instanceof Error ? err.message : "Could not load town."); }
   }, []);
+  const motion=useTownMovement(data?.me||null,residents,join||panel!==null,refresh,setToast);
+  useEffect(()=>{if(!webgl||mapView)motion.heading.current=0;},[webgl,mapView,motion.heading]);
+  function startWalking(){if(!data?.me){setJoin(true);return;}setSelected(data.me.id);setFocus(data.me.place);setReset(r=>r+1);setPanel(null);motion.setWalking(true);}
   useEffect(() => {
     mounted.current=true; void refresh();
     try { const canvas=document.createElement("canvas"), gl=canvas.getContext("webgl2"); setWebgl(!!gl); gl?.getExtension("WEBGL_lose_context")?.loseContext(); } catch { setWebgl(false); }
@@ -117,11 +127,6 @@ export function JollyTown() {
     const timer=setInterval(() => { if(document.visibilityState==="visible") void refresh(); },20000);
     return () => { mounted.current=false; clearInterval(timer); };
   }, [refresh]);
-  useEffect(() => {
-    if(!data?.me) return;
-    const heartbeat = () => { if(document.visibilityState==="visible") void api("/api/jolly/town","PATCH",{action:"heartbeat"}).catch(() => {}); };
-    heartbeat(); const timer=setInterval(heartbeat,35000); return () => clearInterval(timer);
-  }, [data?.me?.id]);
   useEffect(() => { if(!toast) return; const timer=setTimeout(()=>setToast(""),5000); return () => clearTimeout(timer); },[toast]);
   useEffect(() => { messageEnd.current?.scrollIntoView({behavior:"smooth",block:"nearest"}); },[messages,thinking]);
   const select = (id:string) => { const r=residents.find(p=>p.id===id); setSelected(id); if(r) setFocus(r.place); setPanel(r?.kind==="guide"?"chat":"resident"); };
@@ -129,7 +134,7 @@ export function JollyTown() {
   async function action(kind:"move"|"wave", place?:PlaceId) {
     if(!data?.me) { setJoin(true); return; } if(actionBusy) return;
     setActionBusy(true);
-    try { await api("/api/jolly/town","PATCH",{action:kind,place}); await refresh(); if(kind==="move"&&place) { setSelected(data.me.id); setFocus(place); } setToast(kind==="wave"?"You waved to the town. 👋":`Your Jolly is heading to ${placeFor(place!).name}.`); }
+    try { if(kind==="move")motion.setWalking(false); const result=await api("/api/jolly/town","PATCH",{action:kind,place}); if(kind==="move"&&result.position)motion.reset(result.position); await refresh(); if(kind==="move"&&place) { setSelected(data.me.id); setFocus(place); } setToast(kind==="wave"?"You waved to the town. 👋":`Your Jolly is heading to ${placeFor(place!).name}.`); }
     catch(err) { setToast(err instanceof Error?err.message:"Please try again."); }
     finally { setActionBusy(false); }
   }
@@ -142,7 +147,7 @@ export function JollyTown() {
     finally { inFlight.current=false; if(mounted.current) setThinking(false); }
   }
   return <main className={`${styles.town} ${night?styles.night:""}`}>
-    <div className={styles.world}>{webgl&&!mapView ? <SceneBoundary onFail={()=>setWebgl(false)}><TownScene residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} focus={focus} zoom={zoom} reset={reset} night={night} speaking={speaking} speechLevel={voice.level} onFail={()=>setWebgl(false)} /></SceneBoundary> : <div className={styles.mapWorld}><TownMap residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} large />{webgl===null&&<div className={styles.loading}>Opening Jolly Town…</div>}</div>}</div>
+    <div className={styles.world}>{webgl&&!mapView ? <SceneBoundary onFail={()=>setWebgl(false)}><TownScene motion={motion} meId={data?.me?.id} residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} focus={focus} zoom={zoom} reset={reset} night={night} speaking={speaking} speechLevel={voice.level} onFail={()=>setWebgl(false)} /></SceneBoundary> : <div className={styles.mapWorld}><TownMap motion={motion} residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} large />{webgl===null&&<div className={styles.loading}>Opening Jolly Town…</div>}</div>}</div>
     <header className={styles.topbar}>
       <Link href="/jolly" className={styles.townBrand}><Face /><span>Jolly<span>town</span><small>A little world. A place for everyone.</small></span></Link>
       <div className={styles.viewSwitch}><Link href="/jolly">Jolly</Link><span aria-current="page">Town</span></div>
@@ -156,7 +161,7 @@ export function JollyTown() {
       <button onClick={()=>setMapView(v=>!v)} disabled={!webgl} aria-label="Toggle map view" title="Map view">▦</button>
       <button onClick={()=>setPanel(panel==="activity"?null:"activity")} aria-label="Town activity" title="Town activity">≋</button>
     </div>
-    <aside className={styles.mapCard}><div><span>THE NEIGHBORHOOD</span><span>↗</span></div><TownMap residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} /><p>Pick a place to explore</p></aside>
+    <aside className={styles.mapCard}><div><span>THE NEIGHBORHOOD</span><span>↗</span></div><TownMap motion={motion} residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} /><p>Pick a place to explore</p></aside>
     {panel&&<aside className={styles.panel} aria-label="Town details">
       <button className={styles.close} onClick={()=>setPanel(null)} aria-label="Close town details">×</button>
       {panel==="welcome"&&<><span className={styles.eyebrow}>Welcome to your little world</span><h1>Life’s better<br/>with a little <em>Jolly.</em></h1><p>A town of soft souls and curious minds. Wander, meet your Muse neighbors, and find a place that feels like you.</p><div className={styles.welcomeFaces}>{accents.slice(0,4).map(c=><Face color={c} key={c}/>)}</div><button className={styles.primary} onClick={()=>setJoin(true)}>Make a Jolly of your own <span>→</span></button><button className={styles.textButton} onClick={()=>{setPanel(null);setFocus(null);}}>Just exploring? Come on in.</button><div className={styles.tokenNote}><span>✦</span><div><strong>A town for the community</strong><small>{data?.tokenConfigured?"Join with X or a verified token wallet.":"Join with X or a wallet. Holder access arrives with the coin launch."}</small></div></div></>}
@@ -165,8 +170,9 @@ export function JollyTown() {
       {panel==="activity"&&<><span className={styles.eyebrow}>The town noticeboard</span><h2>Little moments.</h2><p>Arrivals, visits, and waves from real town members.</p><div className={styles.events}>{data?.events.length?data.events.map(e=><article key={e.id}><span>{e.action==="waved"?"👋":e.action==="joined"?"✦":"⌂"}</span><div><strong>{e.name}</strong><p>{e.action==="joined"?"moved into town":e.action==="waved"?"waved to the neighbors":`visited ${placeFor(e.place).name}`}</p><time dateTime={e.createdAt}>{new Date(e.createdAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</time></div></article>):<div className={styles.empty}><Face/><strong>The first chapter is yours.</strong><p>Join the town and say hello.</p><button className={styles.primary} onClick={()=>setJoin(true)}>Become a neighbor →</button></div>}</div></>}
       {panel==="chat"&&<><div className={styles.chatHead}><Face/><div><h2>Hey, I’m Jolly.</h2><small>Your friendly town guide</small></div></div><div className={styles.chatMessages} aria-live="polite">{messages.map((m,i)=><p key={i} className={m.role==="user"?styles.userMessage:styles.botMessage}>{m.content}</p>)}{thinking&&<p className={styles.botMessage}>Jolly is thinking…</p>}<div ref={messageEnd}/></div><form className={styles.chatForm} onSubmit={e=>{e.preventDefault();void ask(input);}}><input value={input} onChange={e=>setInput(e.target.value)} placeholder="Ask Jolly anything…" aria-label="Message Jolly" maxLength={600}/><button disabled={thinking||!input.trim()} aria-label="Send message">↑</button></form><div className={styles.voiceLine}><button aria-pressed={voiceEnabled} onClick={()=>{voiceOn.current=!voiceOn.current;setVoiceEnabled(voiceOn.current);if(!voiceOn.current){voice.stop();setSpeaking(false);}else voice.warmUp();}}>{voiceEnabled?"◖ Voice on":"Voice off"}</button><small>{voice.preparing?"Getting ready to speak…":speaking?"Jolly is speaking":voice.deviceVoice?"Using device voice":"Jolly uses AI"}</small></div></>}
     </aside>}
+    {(!panel||!motion.walking)&&<TownWalkingControls motion={motion} name={data?.me?.name} onStart={startWalking}/>}
     <div className={styles.bottomArea}><div className={styles.hint}>{webgl&&!mapView?"Drag to wander · Scroll to zoom · Tap a Jolly to meet them":"Tap a neighborhood or Jolly to explore"}</div><div className={styles.residentDock}><button className={styles.dockHeading} onClick={()=>setPanel("activity")}><span>NEIGHBORS</span><strong>{residents.length}</strong></button><div className={styles.residentScroll}>{residents.map(r=><button className={`${styles.residentButton} ${selected===r.id?styles.residentActive:""}`} key={r.id} onClick={()=>select(r.id)} aria-pressed={selected===r.id}><Face color={r.accent}/><span>{r.id===data?.me?.id?"You":r.name.split(" ")[0]}</span><small>{r.kind==="agent"?"AI":r.kind==="guide"?"GUIDE":r.holder?"HOLDER":"MEMBER"}</small></button>)}</div><button className={styles.placesButton} onClick={()=>choosePlace("plaza")}><span>⌖</span>Places</button></div></div>
     {toast&&<div className={styles.toast} role="status">{toast}</div>}
-    {join&&<JoinDialog data={data} onClose={()=>setJoin(false)} onRefresh={refresh} onError={setToast} onSaved={r=>{setJoin(false);setSelected(r.id);setFocus(r.place);setPanel("resident");setToast(`Welcome home, ${r.name}.`);}}/>}
+    {join&&<JoinDialog data={data} onClose={()=>setJoin(false)} onRefresh={refresh} onError={setToast} onSaved={r=>{if(r.position)motion.reset(r.position);setJoin(false);setSelected(r.id);setFocus(r.place);setPanel("resident");setToast(`Welcome home, ${r.name}.`);}}/>}
   </main>;
 }
