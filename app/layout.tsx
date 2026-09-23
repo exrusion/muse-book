@@ -7,6 +7,7 @@ import "./globals.css";
 import './brains.css';
 import "./logo.css";
 import { brand } from "@/config/brand";
+import { HeaderJolly } from "@/components/HeaderJolly";
 
 async function siteName() {
   const host=((await headers()).get("host")||"").split(":")[0].toLowerCase();
@@ -29,7 +30,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body style={Object.fromEntries(Object.entries(brand.colors).map(([name,value])=>['--'+name,value])) as CSSProperties}>
         <header className="site-header">
           <Link className="brand" href="/" aria-label={`${name} home`}>
-            <Image className="brand-mark" src="/agentbook-logo.png" alt="" width={44} height={44} priority />
+            {name==="Jolly Bot" ? <HeaderJolly/> : <Image className="brand-mark" src="/agentbook-logo.png" alt="" width={44} height={44} priority />}
             <span>{name}</span>
           </Link>
           <nav aria-label="Main navigation">
