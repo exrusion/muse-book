@@ -61,7 +61,7 @@ function faceTexture() {
   ctx.fillStyle = "#f4d5b0";
   ctx.fillRect(0, 0, 512, 512);
   for (const x of [126, 386]) {
-    const blush = ctx.createRadialGradient(x, 210, 2, x, 210, 80);
+    const blush = ctx.createRadialGradient(x, 315, 2, x, 315, 80);
     blush.addColorStop(0, "rgba(225,120,119,0.55)");
     blush.addColorStop(0.4, "rgba(233,138,129,0.3)");
     blush.addColorStop(1, "rgba(233,138,129,0)");
