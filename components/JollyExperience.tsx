@@ -1,6 +1,7 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
+import Image from "next/image";
 import { Component, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { JollyPlushScene } from "./JollyPlush";
 import { useJollyVoice } from "./useJollyVoice";
@@ -134,7 +135,7 @@ export function JollyExperience() {
 
       <div className={styles.chatCard}>
         <div className={styles.chatHead}>
-          <div className={styles.miniJolly}><span /><i /><i /></div>
+          <div className={styles.miniJolly}><Image src="/jolly-reference.webp" alt="Jolly Bot" width={1200} height={1200} sizes="104px" /></div>
           <div><strong>Jolly</strong><small>The face and guide of Muse Agents</small></div>
           <span className={styles.online}>Online</span>
         </div>

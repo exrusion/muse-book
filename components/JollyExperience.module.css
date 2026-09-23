@@ -206,35 +206,21 @@
 .miniJolly {
   width: 49px;
   height: 49px;
+  flex: 0 0 49px;
   position: relative;
+  overflow: hidden;
   border-radius: 45%;
   background: #eee2d0;
   border: 1px solid #d7c8b7;
-  box-shadow: inset 0 -5px 10px #a7937c18;
 }
-.miniJolly span {
+.miniJolly img {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  top: 10px;
-  height: 28px;
-  border-radius: 47%;
-  background: #f7dcc3;
-}
-.miniJolly i {
-  position: absolute;
-  z-index: 2;
-  top: 20px;
-  width: 4px;
-  height: 5px;
-  border-radius: 50%;
-  background: #1d1a20;
-}
-.miniJolly i:nth-child(2) {
-  left: 17px;
-}
-.miniJolly i:nth-child(3) {
-  right: 17px;
+  width: 210%;
+  height: 210%;
+  max-width: none;
+  left: -55%;
+  top: -18%;
+  object-fit: cover;
 }
 .messages {
   flex: 1;
