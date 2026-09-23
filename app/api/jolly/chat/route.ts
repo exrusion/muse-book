@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { moderateText } from "@/lib/security";
+import { issueVoiceToken } from "@/lib/jolly-voice";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       : "";
     const reply = text.trim().replace(/\s{3,}/g, " ").slice(0, 850);
     if (!reply) throw new Error("Empty model response");
-    return NextResponse.json({ reply });
+    return NextResponse.json({ reply, voiceToken: issueVoiceToken(reply) });
   } catch (error) {
     // Never log provider bodies, authorization headers, or user conversations.
     console.error("Jolly chat failed", error instanceof Error ? error.name : "UnknownError");

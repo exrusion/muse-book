@@ -88,12 +88,12 @@ export function JollyExperience() {
     setMessages((current) => [...current, { role: "user", content: message }]);
     try {
       const response = await fetch("/api/jolly/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, history: previous }) });
-      const body = (await response.json()) as { reply?: string; error?: string };
+      const body = (await response.json()) as { reply?: string; voiceToken?: string; error?: string };
       if (!response.ok || !body.reply) throw new Error(body.error || "Jolly could not answer right now.");
       const reply = body.reply;
       setMessages((current) => [...current, { role: "assistant", content: reply }]);
       setState("idle");
-      if (voiceEnabledRef.current) voice.speak(reply);
+      if (voiceEnabledRef.current) void voice.speak(reply, body.voiceToken);
     } catch (caught) {
       setState("idle");
       setError(caught instanceof Error ? caught.message : "Jolly could not answer right now.");
@@ -126,7 +126,7 @@ export function JollyExperience() {
               </Canvas>
             </CanvasErrorBoundary>
           ) : <JollyPoster />}
-          <div className={`${styles.stateBubble} ${styles[state]}`} aria-live="polite"><span>{state === "thinking" ? "···" : state === "speaking" ? "◖◗" : "✦"}</span>{voice.preparing ? `Preparing Jolly’s voice${voice.progress !== null ? ` · ${voice.progress}%` : "…"}` : statusCopy(state)}</div>
+          <div className={`${styles.stateBubble} ${styles[state]}`} aria-live="polite"><span>{state === "thinking" ? "···" : state === "speaking" ? "◖◗" : "✦"}</span>{voice.preparing ? "Jolly is getting ready to speak…" : statusCopy(state)}</div>
           <div className={styles.orbitOne} /><div className={styles.orbitTwo} />
         </div>
         <p className={styles.stageHint}>{webglState === "supported" ? "Move your cursor around Jolly. Tap Jolly for a reaction." : "Jolly’s chat and voice remain fully available."}</p>
@@ -152,7 +152,7 @@ export function JollyExperience() {
           <input value={input} onChange={(event) => setInput(event.target.value)} maxLength={600} placeholder="Ask Jolly anything…" aria-label="Message Jolly" />
           <button type="submit" disabled={!input.trim() || state === "thinking"} aria-label="Send message"><span>↑</span></button>
         </form>
-        <p className={styles.disclaimer}>{voice.deviceVoice && voiceEnabled ? "Using your device’s voice while the natural voice gets ready. " : ""}Jolly uses AI and may occasionally make mistakes.</p>
+        <p className={styles.disclaimer}>{voice.deviceVoice && voiceEnabled ? "Natural voice is unavailable right now. Using your device’s voice. " : ""}Jolly uses AI and may occasionally make mistakes.</p>
       </div>
     </section>
   );
