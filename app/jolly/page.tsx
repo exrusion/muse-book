@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JollyExperience } from "@/components/JollyExperience";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Meet Jolly",
@@ -11,7 +12,7 @@ export default function JollyPage() {
     <main className="page-shell jolly-page">
       <header className="jolly-intro">
         <div><span className="eyebrow">The living face of Muse</span><h1>Meet Jolly.</h1></div>
-        <p>Jolly listens, thinks, speaks, and reacts in real time. Ask about Muse Agents or simply have a conversation.</p>
+        <div><p>Jolly listens, thinks, speaks, and reacts in real time. Ask about Muse Agents or simply have a conversation.</p><Link className="button jolly-button" href="/town">Explore Jolly Town ↗</Link></div>
       </header>
       <JollyExperience />
     </main>

@@ -8,13 +8,14 @@ import { MeshSurfaceSampler } from "three/addons/math/MeshSurfaceSampler.js";
 type Mood = "idle" | "thinking" | "speaking" | "happy";
 
 // One continuous sculpt: a small rounded hood flowing into a soft pear-shaped belly.
-function sculptBody() {
+function sculptBody(detail = "full") {
   const curve = new THREE.CatmullRomCurve3([
     [0, -1.02], [0.48, -1.01], [0.74, -0.84], [0.83, -0.48],
     [0.81, -0.12], [0.72, 0.3], [0.68, 0.77], [0.61, 1.08],
     [0.41, 1.27], [0, 1.33]
   ].map(([x, y]) => new THREE.Vector3(x, y, 0)));
-  const geometry = new THREE.LatheGeometry(curve.getPoints(100).map(p => new THREE.Vector2(Math.max(0, p.x), p.y)), 100);
+  const segments = detail === "town" ? 32 : 100;
+  const geometry = new THREE.LatheGeometry(curve.getPoints(segments).map(p => new THREE.Vector2(Math.max(0, p.x), p.y)), segments);
   geometry.scale(1, 1, 0.78);
   // Flatten the front beneath the fabric face so the face never intersects the body.
   const positions = geometry.getAttribute("position");
@@ -28,9 +29,9 @@ function sculptBody() {
 }
 
 // A softly domed superellipse, not a box or a raised helmet visor.
-function sculptFace() {
+function sculptFace(detail = "full") {
   const positions: number[] = [], uvs: number[] = [], indices: number[] = [];
-  const rings = 24, segments = 96;
+  const rings = detail === "town" ? 10 : 24, segments = detail === "town" ? 32 : 96;
   for (let r = 0; r <= rings; r++) {
     const radius = r / rings;
     for (let s = 0; s <= segments; s++) {
@@ -128,19 +129,19 @@ function Fur({ geometry, count, maskFace = false }: { geometry: THREE.BufferGeom
   </group>;
 }
 
-export function JollyPlush({ state, onTap, speechLevel }: { state: Mood; onTap: () => void; speechLevel: RefObject<number> }) {
+export function JollyPlush({ state, onTap, speechLevel, detail = "full" }: { state: Mood; onTap: () => void; speechLevel: RefObject<number>; detail?: "full" | "town" }) {
   const root = useRef<THREE.Group>(null), left = useRef<THREE.Group>(null), right = useRef<THREE.Group>(null);
   const eyes = useRef<THREE.Group>(null), mouth = useRef<THREE.Group>(null), smile = useRef<THREE.Mesh>(null);
   const { pointer, size } = useThree();
   const reducedMotion = useRef(false);
   const models = useMemo(() => ({
-    body: sculptBody(), face: sculptFace(),
-    arm: new THREE.SphereGeometry(1, 40, 32).scale(0.245, 0.36, 0.26),
-    hand: new THREE.SphereGeometry(1, 40, 32).scale(0.255, 0.245, 0.28),
-    foot: new THREE.CapsuleGeometry(0.235, 0.16, 12, 32).scale(1, 1, 1.2),
+    body: sculptBody(detail), face: sculptFace(detail),
+    arm: new THREE.SphereGeometry(1, detail === "town" ? 16 : 40, detail === "town" ? 12 : 32).scale(0.245, 0.36, 0.26),
+    hand: new THREE.SphereGeometry(1, detail === "town" ? 16 : 40, detail === "town" ? 12 : 32).scale(0.255, 0.245, 0.28),
+    foot: new THREE.CapsuleGeometry(0.235, 0.16, detail === "town" ? 6 : 12, detail === "town" ? 12 : 32).scale(1, 1, 1.2),
     smile: new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.082, 0.014, 0), new THREE.Vector3(0, -0.049, 0.008), new THREE.Vector3(0.082, 0.014, 0)), 28, 0.009, 8, false),
     faceMap: faceTexture()
-  }), []);
+  }), [detail]);
   useEffect(() => {
     reducedMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     return () => Object.values(models).forEach(resource => resource.dispose());
@@ -163,7 +164,9 @@ export function JollyPlush({ state, onTap, speechLevel }: { state: Mood; onTap: 
     mouth.current.scale.y = THREE.MathUtils.damp(mouth.current.scale.y, 0.12 + volume * 0.8, 24, delta);
     mouth.current.scale.x = THREE.MathUtils.damp(mouth.current.scale.x, 1 - volume * 0.18, 18, delta);
   });
-  const density = size.width < 500 ? 38000 : 70000;
+  const density = detail === "town" ? 1800 : size.width < 500 ? 38000 : 70000;
+  const limbDensity = detail === "town" ? 150 : 6500;
+  const handDensity = detail === "town" ? 150 : 5500;
   return <group ref={root} onPointerDown={onTap} scale={0.96}>
     <Fur geometry={models.body} count={density} maskFace />
     <mesh geometry={models.face} position={[0, 0.74, 0.48]} castShadow>
@@ -181,14 +184,14 @@ export function JollyPlush({ state, onTap, speechLevel }: { state: Mood; onTap: 
       <mesh position={[0, -0.034, 0.014]} scale={[0.052, 0.022, 0.008]}><sphereGeometry args={[1, 24, 16]} /><meshBasicMaterial color="#d08787" /></mesh>
     </group>
     <group ref={left} position={[-0.7, -0.04, 0.25]} rotation={[0, 0, -0.3]}>
-      <Fur geometry={models.arm} count={6500} />
-      <group position={[0.1, -0.08, 0.2]}><Fur geometry={models.hand} count={5500} /></group>
+      <Fur geometry={models.arm} count={limbDensity} />
+      <group position={[0.1, -0.08, 0.2]}><Fur geometry={models.hand} count={handDensity} /></group>
     </group>
     <group ref={right} position={[0.7, -0.04, 0.25]} rotation={[0, 0, 0.3]}>
-      <Fur geometry={models.arm} count={6500} />
-      <group position={[-0.1, -0.08, 0.2]}><Fur geometry={models.hand} count={5500} /></group>
+      <Fur geometry={models.arm} count={limbDensity} />
+      <group position={[-0.1, -0.08, 0.2]}><Fur geometry={models.hand} count={handDensity} /></group>
     </group>
-    {[-0.34, 0.34].map(x => <group key={x} position={[x, -1.085, 0.045]}><Fur geometry={models.foot} count={6500} /></group>)}
+    {[-0.34, 0.34].map(x => <group key={x} position={[x, -1.085, 0.045]}><Fur geometry={models.foot} count={limbDensity} /></group>)}
   </group>;
 }
 

@@ -114,6 +114,25 @@ async function main() {
         unique(source_kind,source_id),
         constraint x_bridge_job_status check (status in ('pending','leased','posted','failed'))
       );
+      create table if not exists jolly_town_residents (
+        id uuid primary key default gen_random_uuid(), owner_key text not null unique,
+        name text not null, accent text not null, place text not null default 'plaza',
+        holder boolean not null default false, holder_mint text not null default '',
+        holder_checked_at timestamptz not null default now(),
+        last_seen timestamptz not null default now(), created_at timestamptz not null default now()
+      );
+      create table if not exists jolly_town_events (
+        id uuid primary key default gen_random_uuid(), resident_id uuid not null references jolly_town_residents(id) on delete cascade,
+        action text not null, place text not null, created_at timestamptz not null default now()
+      );
+      create index if not exists idx_jolly_events_created on jolly_town_events(created_at desc);
+      create index if not exists idx_jolly_events_resident on jolly_town_events(resident_id,created_at desc);
+      create table if not exists jolly_town_sessions (
+        token_hash text primary key, wallet text not null, expires_at timestamptz not null
+      );
+      create table if not exists jolly_town_challenges (
+        token_hash text primary key, wallet text not null, message text not null, origin text not null, expires_at timestamptz not null
+      );
       create table if not exists system_settings (
         key text primary key, value jsonb not null, updated_at timestamptz not null default now()
       );

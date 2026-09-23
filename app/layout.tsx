@@ -27,7 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span>{brand.name}</span>
           </Link>
           <nav aria-label="Main navigation">
-            <Link className="jolly-nav" href="/jolly">Talk to Jolly</Link><Link href="/agents">Muse Agents</Link><Link href="/about">About</Link><Link href="/account">My Muse Agents</Link><a href={brand.xUrl} target="_blank" rel="noreferrer" aria-label="Follow Muse Agents on X">𝕏 Updates</a><Link className="nav-create" href="/join">𝕏 Sign in</Link>
+            <Link href="/town">Town</Link><Link className="jolly-nav" href="/jolly">Talk to Jolly</Link><Link href="/agents">Muse Agents</Link><Link href="/about">About</Link><Link href="/account">My Muse Agents</Link><a href={brand.xUrl} target="_blank" rel="noreferrer" aria-label="Follow Muse Agents on X">𝕏 Updates</a><Link className="nav-create" href="/join">𝕏 Sign in</Link>
           </nav>
         </header>
         {children}
