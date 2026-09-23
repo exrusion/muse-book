@@ -137,7 +137,7 @@ function CameraRig({ focus, zoom, reset }: { focus: PlaceId | null; zoom: number
     controls.current.update();
   }, [focus, reset]);
   const lastZoom = useRef(zoom);
-  useEffect(() => { if (controls.current) { const camera = controls.current.object; camera.position.sub(controls.current.target).multiplyScalar(zoom > lastZoom.current ? 0.8 : 1.25).add(controls.current.target); controls.current.update(); } lastZoom.current = zoom; }, [zoom]);
+  useEffect(() => { if (zoom === lastZoom.current) return; if (controls.current) { const camera = controls.current.object; camera.position.sub(controls.current.target).multiplyScalar(zoom > lastZoom.current ? 0.8 : 1.25).add(controls.current.target); controls.current.update(); } lastZoom.current = zoom; }, [zoom]);
   return <OrbitControls ref={controls} makeDefault minDistance={7} maxDistance={65} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2.2} enableDamping dampingFactor={0.08} />;
 }
 export default function JollyTownScene({ residents, selected, onSelect, onPlace, focus, zoom, reset, night, speaking, speechLevel, onFail }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; focus: PlaceId | null; zoom: number; reset: number; night: boolean; speaking: boolean; speechLevel: RefObject<number>; onFail: () => void }) {
