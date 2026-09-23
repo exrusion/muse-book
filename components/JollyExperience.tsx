@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, Sparkles } from "@react-three/drei";
+import { ContactShadows, RoundedBox, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import { Component, FormEvent, ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./JollyExperience.module.css";
@@ -58,7 +58,8 @@ function PlushMaterial({ texture, face = false }: { texture: THREE.Texture | nul
 
 function JollyCharacter({ state, onTap }: { state: JollyState; onTap: () => void }) {
   const root = useRef<THREE.Group>(null);
-  const body = useRef<THREE.Mesh>(null);
+  const body = useRef<THREE.Group>(null);
+  const face = useRef<THREE.Group>(null);
   const leftArm = useRef<THREE.Group>(null);
   const rightArm = useRef<THREE.Group>(null);
   const leftEye = useRef<THREE.Group>(null);
@@ -124,12 +125,13 @@ function JollyCharacter({ state, onTap }: { state: JollyState; onTap: () => void
     }
 
     if (smile.current && openMouth.current && tongue.current) {
-      const talk = speaking ? 0.45 + Math.abs(Math.sin(elapsed * 11.5)) * 0.72 : 0;
+      const talk = speaking ? 0.65 + Math.abs(Math.sin(elapsed * 11.5)) * 0.8 : 0;
       smile.current.visible = !speaking;
       openMouth.current.visible = speaking;
       tongue.current.visible = speaking;
       openMouth.current.scale.y = THREE.MathUtils.lerp(openMouth.current.scale.y, Math.max(0.3, talk), 0.34);
       tongue.current.scale.y = openMouth.current.scale.y;
+      if (face.current) face.current.scale.y = THREE.MathUtils.lerp(face.current.scale.y, speaking ? 1 + talk * 0.018 : 1, 0.2);
     }
   });
 
@@ -139,41 +141,55 @@ function JollyCharacter({ state, onTap }: { state: JollyState; onTap: () => void
   };
 
   return (
-    <group ref={root} onPointerDown={tap} position={[0, 0.03, 0]}>
-      <mesh ref={body} castShadow receiveShadow scale={[1.12, 1.28, 0.76]}>
-        <sphereGeometry args={[1, 72, 72]} />
-        <PlushMaterial texture={texture} />
-      </mesh>
-      <mesh castShadow position={[0, 0.43, 0.69]} scale={[0.77, 0.59, 0.16]}>
-        <sphereGeometry args={[1, 64, 64]} />
-        <PlushMaterial texture={null} face />
-      </mesh>
-
-      <group ref={leftArm} position={[-1.01, -0.12, 0.02]} rotation={[0, 0, -0.16]}>
-        <mesh castShadow rotation={[0, 0, -0.05]}><capsuleGeometry args={[0.19, 0.56, 16, 32]} /><PlushMaterial texture={texture} /></mesh>
-      </group>
-      <group ref={rightArm} position={[1.01, -0.12, 0.02]} rotation={[0, 0, 0.16]}>
-        <mesh castShadow rotation={[0, 0, 0.05]}><capsuleGeometry args={[0.19, 0.56, 16, 32]} /><PlushMaterial texture={texture} /></mesh>
+    <group ref={root} onPointerDown={tap} position={[0, -0.05, 0]} scale={0.9}>
+      <group ref={body}>
+        {/* Jolly's tall, softly squared hood — deliberately not a generic ball. */}
+        <RoundedBox castShadow receiveShadow args={[1.82, 2.18, 1.18]} radius={0.48} smoothness={10} position={[0, 0.08, 0]}>
+          <PlushMaterial texture={texture} />
+        </RoundedBox>
+        <mesh castShadow position={[0, 0.98, -0.02]} scale={[0.76, 0.38, 0.53]}>
+          <sphereGeometry args={[1, 64, 64]} /><PlushMaterial texture={texture} />
+        </mesh>
+        <mesh castShadow position={[0, -0.7, 0.02]} scale={[0.83, 0.54, 0.62]}>
+          <sphereGeometry args={[1, 64, 64]} /><PlushMaterial texture={texture} />
+        </mesh>
       </group>
 
-      <mesh castShadow position={[-0.42, -1.1, 0.05]} scale={[0.43, 0.36, 0.56]}><sphereGeometry args={[1, 48, 48]} /><PlushMaterial texture={texture} /></mesh>
-      <mesh castShadow position={[0.42, -1.1, 0.05]} scale={[0.43, 0.36, 0.56]}><sphereGeometry args={[1, 48, 48]} /><PlushMaterial texture={texture} /></mesh>
-
-      <group ref={leftEye} position={[-0.285, 0.49, 0.855]}>
-        <mesh scale={[0.083, 0.102, 0.047]}><sphereGeometry args={[1, 32, 32]} /><meshPhysicalMaterial color="#17151a" roughness={0.1} clearcoat={1} /></mesh>
-        <mesh position={[-0.023, 0.037, 0.045]} scale={0.023}><sphereGeometry args={[1, 20, 20]} /><meshBasicMaterial color="white" /></mesh>
-      </group>
-      <group ref={rightEye} position={[0.285, 0.49, 0.855]}>
-        <mesh scale={[0.083, 0.102, 0.047]}><sphereGeometry args={[1, 32, 32]} /><meshPhysicalMaterial color="#17151a" roughness={0.1} clearcoat={1} /></mesh>
-        <mesh position={[-0.023, 0.037, 0.045]} scale={0.023}><sphereGeometry args={[1, 20, 20]} /><meshBasicMaterial color="white" /></mesh>
+      {/* Recessed warm face with a visible plush hood border. */}
+      <group ref={face} position={[0, 0.5, 0.61]}>
+        <RoundedBox castShadow args={[1.38, 0.88, 0.18]} radius={0.34} smoothness={10}>
+          <PlushMaterial texture={null} face />
+        </RoundedBox>
+        <RoundedBox position={[0, 0, -0.055]} args={[1.52, 1.02, 0.09]} radius={0.4} smoothness={10}>
+          <meshStandardMaterial color="#ddcdbb" roughness={1} />
+        </RoundedBox>
       </group>
 
-      <mesh position={[-0.48, 0.31, 0.842]} scale={[0.13, 0.055, 0.012]}><sphereGeometry args={[1, 24, 24]} /><meshBasicMaterial color="#efa3a4" transparent opacity={0.42} /></mesh>
-      <mesh position={[0.48, 0.31, 0.842]} scale={[0.13, 0.055, 0.012]}><sphereGeometry args={[1, 24, 24]} /><meshBasicMaterial color="#efa3a4" transparent opacity={0.42} /></mesh>
+      <group ref={leftArm} position={[-0.95, -0.1, 0.01]} rotation={[0, 0, -0.12]}>
+        <mesh castShadow rotation={[0, 0, -0.04]} scale={[0.8, 1, 0.8]}><capsuleGeometry args={[0.18, 0.7, 16, 32]} /><PlushMaterial texture={texture} /></mesh>
+      </group>
+      <group ref={rightArm} position={[0.95, -0.1, 0.01]} rotation={[0, 0, 0.12]}>
+        <mesh castShadow rotation={[0, 0, 0.04]} scale={[0.8, 1, 0.8]}><capsuleGeometry args={[0.18, 0.7, 16, 32]} /><PlushMaterial texture={texture} /></mesh>
+      </group>
 
-      <mesh ref={smile} position={[0, 0.25, 0.874]}><tubeGeometry args={[smileCurve, 28, 0.022, 10, false]} /><meshStandardMaterial color="#211b22" roughness={0.38} /></mesh>
-      <mesh ref={openMouth} visible={false} position={[0, 0.225, 0.875]} scale={[0.125, 0.42, 0.028]}><sphereGeometry args={[1, 32, 32]} /><meshStandardMaterial color="#21171c" roughness={0.46} /></mesh>
-      <mesh ref={tongue} visible={false} position={[0, 0.184, 0.903]} scale={[0.072, 0.19, 0.012]}><sphereGeometry args={[1, 24, 24]} /><meshBasicMaterial color="#df8290" /></mesh>
+      <mesh castShadow position={[-0.39, -1.18, 0.17]} rotation={[0.06, 0.05, 0]} scale={[0.35, 0.27, 0.48]}><sphereGeometry args={[1, 48, 48]} /><PlushMaterial texture={texture} /></mesh>
+      <mesh castShadow position={[0.39, -1.18, 0.17]} rotation={[0.06, -0.05, 0]} scale={[0.35, 0.27, 0.48]}><sphereGeometry args={[1, 48, 48]} /><PlushMaterial texture={texture} /></mesh>
+
+      <group ref={leftEye} position={[-0.25, 0.59, 0.755]}>
+        <mesh scale={[0.064, 0.077, 0.036]}><sphereGeometry args={[1, 32, 32]} /><meshPhysicalMaterial color="#17151a" roughness={0.18} clearcoat={0.7} /></mesh>
+        <mesh position={[-0.018, 0.027, 0.035]} scale={0.016}><sphereGeometry args={[1, 20, 20]} /><meshBasicMaterial color="white" /></mesh>
+      </group>
+      <group ref={rightEye} position={[0.25, 0.59, 0.755]}>
+        <mesh scale={[0.064, 0.077, 0.036]}><sphereGeometry args={[1, 32, 32]} /><meshPhysicalMaterial color="#17151a" roughness={0.18} clearcoat={0.7} /></mesh>
+        <mesh position={[-0.018, 0.027, 0.035]} scale={0.016}><sphereGeometry args={[1, 20, 20]} /><meshBasicMaterial color="white" /></mesh>
+      </group>
+
+      <mesh position={[-0.43, 0.39, 0.755]} scale={[0.12, 0.045, 0.012]}><sphereGeometry args={[1, 24, 24]} /><meshBasicMaterial color="#ee9da1" transparent opacity={0.48} /></mesh>
+      <mesh position={[0.43, 0.39, 0.755]} scale={[0.12, 0.045, 0.012]}><sphereGeometry args={[1, 24, 24]} /><meshBasicMaterial color="#ee9da1" transparent opacity={0.48} /></mesh>
+
+      <mesh ref={smile} position={[0, 0.34, 0.77]}><tubeGeometry args={[smileCurve, 32, 0.027, 12, false]} /><meshStandardMaterial color="#211b22" roughness={0.38} /></mesh>
+      <mesh ref={openMouth} visible={false} position={[0, 0.34, 0.77]} scale={[0.14, 0.34, 0.035]}><sphereGeometry args={[1, 32, 32]} /><meshStandardMaterial color="#21171c" roughness={0.46} /></mesh>
+      <mesh ref={tongue} visible={false} position={[0, 0.285, 0.805]} scale={[0.085, 0.12, 0.012]}><sphereGeometry args={[1, 24, 24]} /><meshBasicMaterial color="#df8290" /></mesh>
     </group>
   );
 }
