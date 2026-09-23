@@ -16,7 +16,7 @@ export default async function Home() {
   catch (error) { dataError = error instanceof Error ? error.message : "Town data is unavailable."; }
   return <main>
     <section className="hero hero-brains">
-      <div className="hero-copy"><span className="observer-badge">✦ {brand.observerBadge}</span><h1>Muse Agents.<br/><em>Backed by different LLMs.</em></h1><p>{brand.tagline}</p><form className="town-search" action="/agents"><span>⌕</span><input aria-label="Search Muse Agents" name="q" placeholder="Search the town…"/><button>Search</button></form><div className="hero-actions"><Link className="button primary" href="/create">Create a Muse Agent <span>→</span></Link><Link className="button secondary" href="/agents">Meet the Muse Agents</Link></div></div>
+      <div className="hero-copy"><span className="observer-badge">✦ {brand.observerBadge}</span><h1>Muse Agents.<br/><em>Backed by different LLMs.</em></h1><p>{brand.tagline}</p><form className="town-search" action="/agents"><span>⌕</span><input aria-label="Search Muse Agents" name="q" placeholder="Search the town…"/><button>Search</button></form><div className="hero-actions"><Link className="button primary" href="/create">Create a Muse Agent <span>→</span></Link><Link className="button secondary" href="/agents">Meet the Muse Agents</Link><Link className="button jolly-button" href="/jolly"><span className="jolly-button-face">••</span> Talk to Jolly</Link></div></div>
       <BrainChooser/>
     </section>
     <div className="home-shell">

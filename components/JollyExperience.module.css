@@ -1,0 +1,459 @@
+.experience {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  gap: 22px;
+  min-height: 670px;
+}
+.stage,
+.chatCard {
+  border: 1.5px solid var(--line);
+  border-radius: 32px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(150deg, #fffaf5 0%, #f5ede7 48%, #eee7fb 100%);
+}
+.stageTop {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 20px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.livePill,
+.voiceButton {
+  background: #ffffffd9;
+  border: 1px solid #ded2c8;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px #4d394510;
+  backdrop-filter: blur(12px);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.livePill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.livePill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #58bf88;
+  box-shadow: 0 0 0 5px #58bf8820;
+  animation: livePulse 2s infinite;
+}
+.voiceButton {
+  pointer-events: auto;
+  padding: 8px 12px;
+  color: var(--ink);
+}
+.voiceButton:hover {
+  background: #fff;
+}
+.canvasWrap {
+  position: relative;
+  flex: 1;
+  min-height: 590px;
+}
+.canvasWrap canvas {
+  position: relative;
+  z-index: 2;
+  display: block;
+  touch-action: pan-y;
+}
+.poster {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, #fffaf5 0 22%, #f5ede7 62%, #eee7fb 100%);
+}
+.poster img {
+  width: min(92%, 620px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 24px 28px #5b3f4a22);
+  animation: posterFloat 4.2s ease-in-out infinite;
+}
+.poster span {
+  position: absolute;
+  left: 50%;
+  bottom: 78px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 38px);
+  padding: 7px 11px;
+  border: 1px solid #ded2c8;
+  border-radius: 999px;
+  background: #ffffffdc;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+.stateBubble {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  z-index: 5;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  background: #ffffffeb;
+  border: 1px solid #ded2c8;
+  border-radius: 999px;
+  padding: 9px 14px;
+  box-shadow: 0 12px 35px #513e4518;
+  font-size: 0.76rem;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+}
+.stateBubble span {
+  color: #9a7bd2;
+  font-family: "Nunito";
+}
+.stateBubble.thinking {
+  border-color: #cdbcf0;
+}
+.stateBubble.speaking {
+  border-color: #f0a49a;
+}
+.stateBubble.happy {
+  border-color: #eec26d;
+}
+.orbitOne,
+.orbitTwo {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid #bca8ed50;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.orbitOne {
+  width: 420px;
+  height: 420px;
+  left: 50%;
+  top: 51%;
+  transform: translate(-50%, -50%) rotate(-14deg);
+}
+.orbitTwo {
+  width: 530px;
+  height: 220px;
+  left: 50%;
+  top: 53%;
+  transform: translate(-50%, -50%) rotate(16deg);
+}
+.stageHint {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.71rem;
+  margin: -2px 20px 18px;
+  position: relative;
+  z-index: 6;
+}
+.chatCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 670px;
+  background: #fffdf9;
+}
+.chatHead {
+  height: 82px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 17px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 11px;
+  align-items: center;
+}
+.chatHead > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+}
+.chatHead strong {
+  font: 900 1rem "Nunito";
+}
+.chatHead small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.online {
+  color: #377e59;
+  background: #e3f6ea;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+.miniJolly {
+  width: 49px;
+  height: 49px;
+  position: relative;
+  border-radius: 45%;
+  background: #eee2d0;
+  border: 1px solid #d7c8b7;
+  box-shadow: inset 0 -5px 10px #a7937c18;
+}
+.miniJolly span {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 10px;
+  height: 28px;
+  border-radius: 47%;
+  background: #f7dcc3;
+}
+.miniJolly i {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  width: 4px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1d1a20;
+}
+.miniJolly i:nth-child(2) {
+  left: 17px;
+}
+.miniJolly i:nth-child(3) {
+  right: 17px;
+}
+.messages {
+  flex: 1;
+  overflow: auto;
+  padding: 21px 17px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #d9cdbf transparent;
+}
+.message {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 13px;
+}
+.message p {
+  font-size: 0.85rem;
+  line-height: 1.52;
+  margin: 0;
+  max-width: 86%;
+  padding: 11px 13px;
+  border-radius: 17px;
+}
+.jolly p {
+  background: #f6eee6;
+  border-bottom-left-radius: 5px;
+}
+.user {
+  justify-content: flex-end;
+}
+.user p {
+  background: var(--ink);
+  color: #fff;
+  border-bottom-right-radius: 5px;
+}
+.messageMark {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #f3b4cf;
+  border: 1px solid #d39ab4;
+  font: 900 0.7rem "Nunito";
+}
+.typing {
+  display: flex;
+  gap: 4px;
+  padding: 15px 17px !important;
+}
+.typing i {
+  width: 5px;
+  height: 5px;
+  background: #9b8791;
+  border-radius: 50%;
+  animation: typing 1s infinite;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.starters {
+  display: flex;
+  gap: 7px;
+  overflow: auto;
+  padding: 6px 17px 11px;
+  scrollbar-width: none;
+}
+.starters::-webkit-scrollbar {
+  display: none;
+}
+.starters button {
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 0.67rem;
+  font-weight: 700;
+}
+.starters button:hover {
+  border-color: #e09b8f;
+  background: #fff5ef;
+}
+.error {
+  margin: 6px 17px 0;
+  padding: 9px 11px;
+  border-radius: 11px;
+  background: #fff0eb;
+  color: #944d44;
+  font-size: 0.72rem;
+}
+.composer {
+  margin: 10px 15px 0;
+  border: 1.5px solid #d9cdbf;
+  background: #fff;
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+  padding: 5px 6px 5px 13px;
+  box-shadow: 0 8px 24px #583b4510;
+}
+.composer:focus-within {
+  border-color: #ee8c7e;
+  box-shadow: 0 0 0 4px #ee8c7e15;
+}
+.composer input {
+  height: 44px;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 0.84rem;
+}
+.composer button {
+  width: 39px;
+  height: 39px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--coral);
+  color: var(--ink);
+  font-size: 1.2rem;
+  font-weight: 900;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.composer button:disabled {
+  opacity: 0.38;
+  box-shadow: none;
+}
+.disclaimer {
+  text-align: center;
+  color: #96909a;
+  font-size: 0.61rem;
+  margin: 8px 12px 13px;
+}
+@keyframes livePulse {
+  50% {
+    box-shadow: 0 0 0 9px #58bf8800;
+  }
+}
+@keyframes posterFloat {
+  50% {
+    transform: translateY(-7px) rotate(0.4deg);
+  }
+}
+@keyframes typing {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+@media (max-width: 980px) {
+  .experience {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .stage {
+    min-height: 560px;
+  }
+  .canvasWrap {
+    min-height: 520px;
+  }
+  .chatCard {
+    min-height: 600px;
+  }
+}
+@media (max-width: 620px) {
+  .experience {
+    gap: 13px;
+  }
+  .stage,
+  .chatCard {
+    border-radius: 24px;
+  }
+  .stage {
+    min-height: 500px;
+  }
+  .canvasWrap {
+    min-height: 460px;
+  }
+  .stageTop {
+    left: 13px;
+    right: 13px;
+    top: 13px;
+  }
+  .orbitOne {
+    width: 330px;
+    height: 330px;
+  }
+  .orbitTwo {
+    width: 390px;
+  }
+  .stateBubble {
+    bottom: 22px;
+    font-size: 0.69rem;
+  }
+  .stageHint {
+    display: none;
+  }
+  .chatCard {
+    min-height: 560px;
+  }
+  .chatHead {
+    height: 72px;
+  }
+  .messages {
+    max-height: 410px;
+  }
+  .starters {
+    padding-left: 13px;
+  }
+  .composer {
+    margin-left: 11px;
+    margin-right: 11px;
+  }
+}
