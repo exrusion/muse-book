@@ -149,7 +149,7 @@ export function JollyTown() {
   return <main className={`${styles.town} ${night?styles.night:""}`}>
     <div className={styles.world}>{webgl&&!mapView ? <SceneBoundary onFail={()=>setWebgl(false)}><TownScene motion={motion} meId={data?.me?.id} residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} focus={focus} zoom={zoom} reset={reset} night={night} speaking={speaking} speechLevel={voice.level} onFail={()=>setWebgl(false)} /></SceneBoundary> : <div className={styles.mapWorld}><TownMap motion={motion} residents={residents} selected={selected} onSelect={select} onPlace={choosePlace} large />{webgl===null&&<div className={styles.loading}>Opening Jolly Town…</div>}</div>}</div>
     <header className={styles.topbar}>
-      <Link href="/jolly" className={styles.townBrand}><Face /><span>Jolly<span>town</span><small>A little world. A place for everyone.</small></span></Link>
+      <Link href="/jolly" className={styles.townBrand}><Face /><span>Jolly <span>Bot</span><small>A little world. A place for everyone.</small></span></Link>
       <div className={styles.viewSwitch}><Link href="/jolly">Jolly</Link><span aria-current="page">Town</span></div>
       <div className={styles.topActions}><button className={styles.weather} onClick={()=>setNight(n=>!n)} aria-label={night?"Switch to daytime":"Switch to evening"}>{night?"☾":"☀"}<span>{night?"Evening":"Golden hour"}</span></button><button className={styles.primary} onClick={()=>setJoin(true)}>{data?.me?"My Jolly":"Join the town"}<span>↗</span></button></div>
     </header>
