@@ -71,8 +71,8 @@
   z-index: 2;
   display: block;
   touch-action: pan-y;
-  /* Grade only the 3D render; leave the model, chat and controls unchanged. */
-  filter: saturate(1.24) contrast(1.12) brightness(0.94);
+  /* Gentle final grade; depth and warmth come from the studio lighting. */
+  filter: saturate(1.12) contrast(1.055);
 }
 .poster {
   position: absolute;

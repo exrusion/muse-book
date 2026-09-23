@@ -3,6 +3,8 @@
 import { Canvas } from "@react-three/fiber";
 import { Component, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { JollyPlushScene } from "./JollyPlush";
+import { useJollyVoice } from "./useJollyVoice";
+import { ACESFilmicToneMapping } from "three";
 import styles from "./JollyExperience.module.css";
 
 type JollyState = "idle" | "thinking" | "speaking" | "happy";
@@ -58,10 +60,11 @@ export function JollyExperience() {
   const [error, setError] = useState("");
   const [webglState, setWebglState] = useState<WebGLState>("checking");
   const messagesRef = useRef<HTMLDivElement>(null);
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voiceEnabledRef = useRef(true);
+  const inFlight = useRef(false);
+  const voice = useJollyVoice((speaking) => setState(current => current === "thinking" ? current : speaking ? "speaking" : "idle"));
 
   useEffect(() => { messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" }); }, [messages, state]);
-  useEffect(() => () => { if (typeof window !== "undefined") window.speechSynthesis?.cancel(); }, []);
   useEffect(() => {
     try {
       const canvas = document.createElement("canvas");
@@ -72,30 +75,12 @@ export function JollyExperience() {
     }
   }, []);
 
-  const speak = (text: string) => {
-    if (!voiceEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setState("happy");
-      window.setTimeout(() => setState("idle"), 900);
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    utterance.voice = voices.find((voice) => /samantha|aria|ava|serena|google uk english female/i.test(voice.name)) || voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) || null;
-    utterance.rate = 1.02;
-    utterance.pitch = 1.08;
-    utterance.volume = 0.92;
-    utterance.onstart = () => setState("speaking");
-    utterance.onend = () => { speechRef.current = null; setState("idle"); };
-    utterance.onerror = () => { speechRef.current = null; setState("idle"); };
-    speechRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  };
-
   const askJolly = async (question: string) => {
     const message = question.trim();
-    if (!message || state === "thinking") return;
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    if (!message || inFlight.current) return;
+    inFlight.current = true;
+    voice.stop();
+    if (voiceEnabledRef.current) voice.warmUp();
     setInput("");
     setError("");
     setState("thinking");
@@ -107,17 +92,20 @@ export function JollyExperience() {
       if (!response.ok || !body.reply) throw new Error(body.error || "Jolly could not answer right now.");
       const reply = body.reply;
       setMessages((current) => [...current, { role: "assistant", content: reply }]);
-      speak(reply);
+      setState("idle");
+      if (voiceEnabledRef.current) voice.speak(reply);
     } catch (caught) {
       setState("idle");
       setError(caught instanceof Error ? caught.message : "Jolly could not answer right now.");
-    }
+    } finally { inFlight.current = false; }
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void askJolly(input); };
   const toggleVoice = () => {
-    if (voiceEnabled && typeof window !== "undefined") { window.speechSynthesis?.cancel(); setState("idle"); }
-    setVoiceEnabled((current) => !current);
+    voiceEnabledRef.current = !voiceEnabledRef.current;
+    if (!voiceEnabledRef.current) { voice.stop(); setState(current => current === "thinking" ? current : "idle"); }
+    else voice.warmUp();
+    setVoiceEnabled(voiceEnabledRef.current);
   };
   const tapJolly = () => {
     if (state !== "thinking" && state !== "speaking") { setState("happy"); window.setTimeout(() => setState("idle"), 1050); }
@@ -133,12 +121,12 @@ export function JollyExperience() {
         <div className={styles.canvasWrap}>
           {webglState === "supported" ? (
             <CanvasErrorBoundary fallback={<JollyPoster />} onFail={() => setWebglState("unsupported")}>
-              <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 0.15, 6.3], fov: 31, near: 0.1, far: 30 }} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }} aria-label="Interactive 3D model of Jolly">
-                <JollyPlushScene state={state} onTap={tapJolly} />
+              <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 0.15, 6.3], fov: 31, near: 0.1, far: 30 }} gl={{ antialias: true, alpha: false, powerPreference: "high-performance", toneMapping: ACESFilmicToneMapping, toneMappingExposure: 0.94 }} aria-label="Interactive 3D model of Jolly">
+                <JollyPlushScene state={state} onTap={tapJolly} speechLevel={voice.level} />
               </Canvas>
             </CanvasErrorBoundary>
           ) : <JollyPoster />}
-          <div className={`${styles.stateBubble} ${styles[state]}`} aria-live="polite"><span>{state === "thinking" ? "···" : state === "speaking" ? "◖◗" : "✦"}</span>{statusCopy(state)}</div>
+          <div className={`${styles.stateBubble} ${styles[state]}`} aria-live="polite"><span>{state === "thinking" ? "···" : state === "speaking" ? "◖◗" : "✦"}</span>{voice.preparing ? `Preparing Jolly’s voice${voice.progress !== null ? ` · ${voice.progress}%` : "…"}` : statusCopy(state)}</div>
           <div className={styles.orbitOne} /><div className={styles.orbitTwo} />
         </div>
         <p className={styles.stageHint}>{webglState === "supported" ? "Move your cursor around Jolly. Tap Jolly for a reaction." : "Jolly’s chat and voice remain fully available."}</p>
@@ -164,7 +152,7 @@ export function JollyExperience() {
           <input value={input} onChange={(event) => setInput(event.target.value)} maxLength={600} placeholder="Ask Jolly anything…" aria-label="Message Jolly" />
           <button type="submit" disabled={!input.trim() || state === "thinking"} aria-label="Send message"><span>↑</span></button>
         </form>
-        <p className={styles.disclaimer}>Jolly is powered by a live LLM and may occasionally make mistakes.</p>
+        <p className={styles.disclaimer}>{voice.deviceVoice && voiceEnabled ? "Using your device’s voice while the natural voice gets ready. " : ""}Jolly uses AI and may occasionally make mistakes.</p>
       </div>
     </section>
   );
