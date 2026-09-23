@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import path from "node:path";
+import { pcmWave } from "./jolly-audio";
 
 function signature(payload: string) {
   const secret = process.env.JOLLY_API_KEY;
@@ -52,7 +53,7 @@ export async function generateJollyVoice(ticket: { text: string; expires: number
     const tts = await getEngine();
     const text = ticket.text.replace(/[*_#`]/g, "").replace(/https?:\/\/\S+/g, "the link");
     const audio = await tts.generate(text, { voice: "af_heart", speed: 1.02 });
-    const bytes = new Uint8Array(await audio.toBlob().arrayBuffer());
+    const bytes = pcmWave(audio.audio, audio.sampling_rate);
     if (cache.size >= 12) cache.delete(cache.keys().next().value!);
     cache.set(ticket.id, { expires: ticket.expires, audio: bytes });
     return bytes;

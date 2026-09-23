@@ -3,108 +3,144 @@
 import { useEffect, useRef, useState } from "react";
 
 export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
-  const [preparing, setPreparing] = useState(false);
-  const [deviceVoice, setDeviceVoice] = useState(false);
-  const context = useRef<AudioContext | null>(null);
-  const source = useRef<AudioBufferSourceNode | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const abort = useRef<AbortController | null>(null);
-  const sequence = useRef(0);
-  const frame = useRef(0);
-  const level = useRef(0);
-  const utterance = useRef<SpeechSynthesisUtterance | null>(null);
-  const callback = useRef(onSpeaking);
-  callback.current = onSpeaking;
+  const [preparing, setPreparing] = useState(false), [deviceVoice, setDeviceVoice] = useState(false);
+  const [error, setError] = useState(""), [hasAudio, setHasAudio] = useState(false), [canReplay, setCanReplay] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const context = useRef<AudioContext | null>(null), analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaSource = useRef<MediaElementAudioSourceNode | null>(null);
+  const abort = useRef<AbortController | null>(null), sequence = useRef(0), frame = useRef(0), level = useRef(0);
+  const objectUrl = useRef(""), latest = useRef<{ text: string; token?: string } | null>(null);
+  const utterance = useRef<SpeechSynthesisUtterance | null>(null), speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callback = useRef(onSpeaking); callback.current = onSpeaking;
 
+  function finish() { cancelAnimationFrame(frame.current); level.current = 0; callback.current(false); }
   function stop() {
-    sequence.current++;
-    abort.current?.abort(); abort.current = null;
-    cancelAnimationFrame(frame.current);
-    if (source.current) { source.current.onended = null; source.current.stop(); source.current.disconnect(); source.current = null; }
-    analyserRef.current?.disconnect(); analyserRef.current = null;
-    if (utterance.current) { utterance.current.onend = null; utterance.current.onerror = null; }
+    sequence.current++; abort.current?.abort(); abort.current = null;
+    audioRef.current?.pause();
+    if (speechTimer.current) clearTimeout(speechTimer.current);
+    if (utterance.current) { utterance.current.onstart = null; utterance.current.onend = null; utterance.current.onerror = null; }
     window.speechSynthesis?.cancel(); utterance.current = null;
-    level.current = 0; setPreparing(false);
+    finish(); setPreparing(false);
   }
-
+  function warmUp() {
+    try {
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!context.current || context.current.state === "closed") context.current = new AudioContextClass();
+      // Start a silent frame during the actual click, before waiting for the chat reply.
+      const ctx = context.current, unlock = ctx.createBufferSource();
+      unlock.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); unlock.connect(ctx.destination);
+      unlock.onended = () => unlock.disconnect(); unlock.start();
+      void ctx.resume().catch(() => {});
+    } catch { /* Native audio playback also works without Web Audio. */ }
+  }
+  function animate() {
+    cancelAnimationFrame(frame.current);
+    const analyser = analyserRef.current, waveform = analyser ? new Uint8Array(analyser.fftSize) : null;
+    const tick = () => {
+      const audio = audioRef.current;
+      if (!audio || audio.paused || audio.ended) { finish(); return; }
+      if (analyser && waveform) {
+        analyser.getByteTimeDomainData(waveform);
+        let power = 0; for (const sample of waveform) power += ((sample - 128) / 128) ** 2;
+        level.current = Math.min(1, Math.sqrt(power / waveform.length) * 6);
+      } else level.current = 0.12 + Math.abs(Math.sin(audio.currentTime * 13)) * 0.3;
+      frame.current = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  async function play(id: number) {
+    const audio = audioRef.current; if (!audio || id !== sequence.current) return;
+    const ctx = context.current;
+    if (ctx && ctx.state !== "running") {
+      // A suspended context must be resumed; routing audio into it would be silent.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([ctx.resume().catch(() => {}), new Promise<void>(resolve => { timer = setTimeout(resolve, 1200); })]);
+      if (timer) clearTimeout(timer);
+    }
+    if (id !== sequence.current) return;
+    if (ctx?.state === "running" && !mediaSource.current) {
+      try {
+        const analyser = ctx.createAnalyser(); analyser.fftSize = 256;
+        const source = ctx.createMediaElementSource(audio);
+        source.connect(analyser); analyser.connect(ctx.destination);
+        mediaSource.current = source; analyserRef.current = analyser;
+      } catch { /* Keep native audio if analyser setup is unsupported. */ }
+    }
+    if (mediaSource.current && ctx?.state !== "running") {
+      setPreparing(false); setError("Tap Play reply to enable sound."); return;
+    }
+    try {
+      audio.currentTime = 0;
+      await audio.play();
+      if (id !== sequence.current) return;
+      setPreparing(false); setError("");
+    } catch {
+      if (id === sequence.current) { finish(); setPreparing(false); setError("Tap Play reply to enable sound."); }
+    }
+  }
   function fallback(id: number, text: string) {
     if (id !== sequence.current) return;
     setPreparing(false); setDeviceVoice(true);
-    if (!("speechSynthesis" in window)) { callback.current(false); return; }
+    if (!("speechSynthesis" in window)) { setError("Voice is unavailable. Tap Play reply to try again."); finish(); return; }
     const speech = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
     const score = (v: SpeechSynthesisVoice) => (/natural|premium|enhanced/i.test(v.name) ? 20 : 0) + (/samantha|ava|aria|jenny|google uk english female/i.test(v.name) ? 10 : 0);
-    speech.voice = voices.sort((a, b) => score(b) - score(a))[0] || null;
-    speech.rate = 0.97; speech.pitch = 1; speech.volume = 0.95;
-    let lastWord = 0;
+    speech.voice = voices.sort((a,b) => score(b)-score(a))[0] || null;
+    speech.rate = 0.97; speech.pitch = 1; speech.volume = 1;
+    speechTimer.current = setTimeout(() => { if(id === sequence.current) { setError("Tap Play reply to enable sound."); finish(); } }, 4000);
     speech.onstart = () => {
-      callback.current(true);
-      const pulse = () => {
-        const t = performance.now();
-        level.current = Math.min(0.7, 0.12 + Math.abs(Math.sin(t / 95)) * 0.22 + Math.max(0, 1 - (t - lastWord) / 200) * 0.3);
-        frame.current = requestAnimationFrame(pulse);
-      };
-      pulse();
+      if(id !== sequence.current) return;
+      if(speechTimer.current) clearTimeout(speechTimer.current);
+      setError(""); callback.current(true);
+      const pulse = () => { level.current = 0.12 + Math.abs(Math.sin(performance.now()/95))*0.35; frame.current = requestAnimationFrame(pulse); }; pulse();
     };
-    speech.onboundary = () => { lastWord = performance.now(); };
-    speech.onend = speech.onerror = () => { cancelAnimationFrame(frame.current); level.current = 0; callback.current(false); utterance.current = null; };
-    utterance.current = speech; window.speechSynthesis.speak(speech);
+    speech.onend = () => { if(id !== sequence.current) return; if(speechTimer.current) clearTimeout(speechTimer.current); utterance.current = null; finish(); };
+    speech.onerror = () => { if(id !== sequence.current) return; if(speechTimer.current) clearTimeout(speechTimer.current); utterance.current = null; finish(); setError("Voice could not start. Tap Play reply to try again."); };
+    utterance.current = speech; window.speechSynthesis.resume(); window.speechSynthesis.speak(speech);
   }
-
-  function warmUp() {
-    try {
-      // Unlock playback in the user's send/toggle gesture, including mobile Safari.
-      if (!context.current || context.current.state === "closed") context.current = new AudioContext();
-      void context.current.resume().catch(() => {});
-    } catch { /* A device voice remains available if Web Audio is unsupported. */ }
-  }
-
   async function speak(text: string, token?: string) {
-    stop(); warmUp();
-    const id = sequence.current;
-    const clean = text.replace(/[*_#`]/g, "").replace(/https?:\/\/\S+/g, "the link").trim();
-    if (!token || !context.current) { fallback(id, clean); return; }
+    stop(); warmUp(); setError(""); setDeviceVoice(false); setHasAudio(false); setCanReplay(true);
+    const id = sequence.current, clean = text.replace(/[*_#`]/g, "").replace(/https?:\/\/\S+/g, "the link").trim();
+    latest.current = { text: clean, token };
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); objectUrl.current = "";
+    const audio = audioRef.current; if (audio) { audio.removeAttribute("src"); audio.load(); }
+    if (!token || !audio) { fallback(id, clean); return; }
     setPreparing(true);
     const controller = new AbortController(); abort.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 25_000);
+    const timeout = setTimeout(() => controller.abort(), 60_000);
     try {
       const response = await fetch("/api/jolly/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }), signal: controller.signal });
       if (!response.ok) throw new Error("Voice unavailable");
-      const bytes = await response.arrayBuffer();
-      const ctx = context.current;
-      if (id !== sequence.current || !ctx) return;
-      const buffer = await ctx.decodeAudioData(bytes);
-      if (id !== sequence.current) return;
-      if (ctx.state !== "running") throw new Error("Audio paused");
-      setPreparing(false); setDeviceVoice(false);
-      const node = ctx.createBufferSource(); node.buffer = buffer;
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 256;
-      analyserRef.current = analyser;
-      node.connect(analyser); analyser.connect(ctx.destination);
-      const waveform = new Uint8Array(analyser.fftSize);
-      const animate = () => {
-        analyser.getByteTimeDomainData(waveform);
-        let power = 0;
-        for (const sample of waveform) power += ((sample - 128) / 128) ** 2;
-        level.current = Math.min(1, Math.sqrt(power / waveform.length) * 6);
-        frame.current = requestAnimationFrame(animate);
-      };
-      source.current = node;
-      node.onended = () => {
-        cancelAnimationFrame(frame.current); node.disconnect(); analyser.disconnect();
-        analyserRef.current = null; source.current = null; level.current = 0; callback.current(false);
-      };
-      node.start(); animate(); callback.current(true);
-    } catch { if (id === sequence.current) fallback(id, clean); }
-    finally { clearTimeout(timeout); if (id === sequence.current) abort.current = null; }
+      const blob = await response.blob(); if (id !== sequence.current) return;
+      objectUrl.current = URL.createObjectURL(blob); audio.src = objectUrl.current; audio.load(); setHasAudio(true);
+      await play(id);
+    } catch { if(id === sequence.current) fallback(id, clean); }
+    finally { clearTimeout(timeout); if(id === sequence.current) abort.current = null; }
   }
-
-  useEffect(() => () => {
-    sequence.current++; abort.current?.abort(); cancelAnimationFrame(frame.current);
-    if (source.current) { source.current.onended = null; source.current.stop(); }
-    analyserRef.current?.disconnect();
-    if (utterance.current) { utterance.current.onend = null; utterance.current.onerror = null; }
-    window.speechSynthesis?.cancel(); void context.current?.close();
+  function replay() {
+    warmUp();
+    if (objectUrl.current) { stop(); setError(""); void play(sequence.current); }
+    else if(latest.current) void speak(latest.current.text, latest.current.token);
+  }
+  useEffect(() => {
+    const audio = audioRef.current;
+    const playing = () => {
+      if(mediaSource.current && context.current?.state !== "running") { audio?.pause(); setError("Tap Play reply to enable sound."); return; }
+      setPreparing(false); setError(""); callback.current(true); animate();
+    };
+    const failed = () => { if(objectUrl.current) { finish(); setPreparing(false); setError("Audio could not play. Tap Play reply to try again."); } };
+    audio?.addEventListener("playing", playing); audio?.addEventListener("pause", finish); audio?.addEventListener("ended", finish); audio?.addEventListener("error", failed);
+    return () => {
+      sequence.current++; abort.current?.abort(); cancelAnimationFrame(frame.current);
+      if(speechTimer.current) clearTimeout(speechTimer.current);
+      audio?.removeEventListener("playing", playing); audio?.removeEventListener("pause", finish); audio?.removeEventListener("ended", finish); audio?.removeEventListener("error", failed); audio?.pause();
+      if(utterance.current) { utterance.current.onstart = null; utterance.current.onend = null; utterance.current.onerror = null; }
+      window.speechSynthesis?.cancel(); mediaSource.current?.disconnect(); analyserRef.current?.disconnect();
+      mediaSource.current = null; analyserRef.current = null;
+      void context.current?.close(); context.current = null;
+      if(objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    };
   }, []);
-  return { speak, stop, warmUp, level, preparing, deviceVoice };
+  return { speak, stop, warmUp, replay, audioRef, level, preparing, deviceVoice, error, hasAudio, canReplay };
 }

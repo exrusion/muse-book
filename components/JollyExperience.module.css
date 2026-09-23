@@ -459,3 +459,5 @@
     margin-right: 11px;
   }
 }
+
+.replyAudio{padding:0 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.replyAudio:empty{display:none}.replyAudio audio{height:34px;max-width:100%;flex:1;min-width:150px}.replyAudio audio[hidden]{display:none}.replyAudio button{border:1px solid #e0d5c7;background:#fbf7f0;color:#403651;padding:8px 12px;border-radius:20px;font:inherit;font-size:12px;cursor:pointer}.replyAudio button:disabled{opacity:.55;cursor:wait}.replyAudio p{width:100%;font-size:12px;color:#795475;margin:0;padding:0 0 8px}

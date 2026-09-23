@@ -147,6 +147,11 @@ export function JollyExperience() {
           {state === "thinking" && <div className={`${styles.message} ${styles.jolly}`}><span className={styles.messageMark}>J</span><p className={styles.typing}><i /><i /><i /></p></div>}
         </div>
         {messages.length < 4 && <div className={styles.starters}>{starters.map((starter) => <button key={starter} type="button" onClick={() => void askJolly(starter)}>{starter}</button>)}</div>}
+        <div className={styles.replyAudio}>
+          <audio ref={voice.audioRef} controls preload="auto" hidden={!voice.hasAudio} aria-label="Jolly’s spoken reply" />
+          {voice.canReplay && <button type="button" disabled={voice.preparing || state === "thinking"} onClick={()=>{voiceEnabledRef.current=true;setVoiceEnabled(true);voice.replay();}}>{voice.preparing ? "Preparing voice…" : "▶ Play reply"}</button>}
+          {voice.error && <p role="status">{voice.error}</p>}
+        </div>
         {error && <p className={styles.error}>{error}</p>}
         <form className={styles.composer} onSubmit={submit}>
           <input value={input} onChange={(event) => setInput(event.target.value)} maxLength={600} placeholder="Ask Jolly anything…" aria-label="Message Jolly" />

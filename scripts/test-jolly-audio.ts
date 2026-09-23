@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { pcmWave } from "../lib/jolly-audio";
+const samples=new Float32Array([-2,-1,-.5,0,.5,1,2,NaN]);
+const bytes=pcmWave(samples,24000), view=new DataView(bytes.buffer);
+assert.equal(new TextDecoder().decode(bytes.subarray(0,4)),"RIFF");
+assert.equal(new TextDecoder().decode(bytes.subarray(8,12)),"WAVE");
+assert.equal(view.getUint16(20,true),1,"Integer PCM, not float WAV");
+assert.equal(view.getUint16(22,true),1); assert.equal(view.getUint16(34,true),16);
+assert.equal(view.getUint32(24,true),24000); assert.equal(view.getUint32(28,true),48000);
+assert.equal(view.getUint32(4,true)+8,bytes.length); assert.equal(view.getUint32(40,true),samples.length*2);
+assert.deepEqual(Array.from({length:samples.length},(_,i)=>view.getInt16(44+i*2,true)),[-32768,-32768,-16384,0,16384,32767,32767,0]);
+console.log("Voice WAV: PCM16 format, sample rate, size, clipping and invalid sample handling passed.");
