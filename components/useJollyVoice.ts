@@ -80,27 +80,27 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
       if (id !== sequence.current) return;
       setPreparing(false); setError("");
     } catch {
-      if (id === sequence.current) { finish(); setPreparing(false); setError("Tap Play reply to enable sound."); }
+      if (id === sequence.current) { finish(); setPreparing(false); setError("Tap Enable sound to hear this reply."); }
     }
   }
   function fallback(id: number, text: string) {
     if (id !== sequence.current) return;
-    setPreparing(false); setDeviceVoice(true);
-    if (!("speechSynthesis" in window)) { setError("Voice is unavailable. Tap Play reply to try again."); finish(); return; }
+    setPreparing(true); setDeviceVoice(true);
+    if (!("speechSynthesis" in window)) { setPreparing(false); setError("Voice is unavailable. Tap Enable sound to try again."); finish(); return; }
     const speech = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
     const score = (v: SpeechSynthesisVoice) => (/natural|premium|enhanced/i.test(v.name) ? 20 : 0) + (/samantha|ava|aria|jenny|google uk english female/i.test(v.name) ? 10 : 0);
     speech.voice = voices.sort((a,b) => score(b)-score(a))[0] || null;
     speech.rate = 0.97; speech.pitch = 1; speech.volume = 1;
-    speechTimer.current = setTimeout(() => { if(id === sequence.current) { setError("Tap Play reply to enable sound."); finish(); } }, 4000);
+    speechTimer.current = setTimeout(() => { if(id === sequence.current) { setPreparing(false); window.speechSynthesis.cancel(); setError("Tap Enable sound to hear this reply."); finish(); } }, 4000);
     speech.onstart = () => {
       if(id !== sequence.current) return;
       if(speechTimer.current) clearTimeout(speechTimer.current);
-      setError(""); callback.current(true);
+      setPreparing(false); setError(""); callback.current(true);
       const pulse = () => { level.current = 0.12 + Math.abs(Math.sin(performance.now()/95))*0.35; frame.current = requestAnimationFrame(pulse); }; pulse();
     };
     speech.onend = () => { if(id !== sequence.current) return; if(speechTimer.current) clearTimeout(speechTimer.current); utterance.current = null; finish(); };
-    speech.onerror = () => { if(id !== sequence.current) return; if(speechTimer.current) clearTimeout(speechTimer.current); utterance.current = null; finish(); setError("Voice could not start. Tap Play reply to try again."); };
+    speech.onerror = () => { if(id !== sequence.current) return; if(speechTimer.current) clearTimeout(speechTimer.current); utterance.current = null; setPreparing(false); finish(); setError("Voice could not start. Tap Enable sound to try again."); };
     utterance.current = speech; window.speechSynthesis.resume(); window.speechSynthesis.speak(speech);
   }
   async function speak(text: string, token?: string) {
@@ -112,7 +112,7 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
     if (!token || !audio) { fallback(id, clean); return; }
     setPreparing(true);
     const controller = new AbortController(); abort.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 60_000);
+    const timeout = setTimeout(() => controller.abort(), 12_000);
     try {
       const response = await fetch("/api/jolly/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }), signal: controller.signal });
       if (!response.ok) throw new Error("Voice unavailable");
@@ -137,7 +137,7 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
       if (bufferSource.current) { bufferSource.current.onended = null; bufferSource.current.stop(); bufferSource.current.disconnect(); bufferSource.current = null; }
       setPreparing(false); setError(""); callback.current(true); animate();
     };
-    const failed = () => { if(objectUrl.current) { finish(); setPreparing(false); setError("Audio could not play. Tap Play reply to try again."); } };
+    const failed = () => { if(objectUrl.current) { finish(); setPreparing(false); setError("Audio could not play. Tap Enable sound to try again."); } };
     audio?.addEventListener("playing", playing); audio?.addEventListener("pause", finish); audio?.addEventListener("ended", finish); audio?.addEventListener("error", failed);
     return () => {
       sequence.current++; abort.current?.abort(); cancelAnimationFrame(frame.current);
@@ -154,3 +154,4 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
   }, []);
   return { speak, stop, warmUp, replay, audioRef, level, preparing, deviceVoice, error, hasAudio, canReplay };
 }
+

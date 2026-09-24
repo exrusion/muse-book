@@ -63,7 +63,19 @@ export function JollyExperience() {
   const messagesRef = useRef<HTMLDivElement>(null);
   const voiceEnabledRef = useRef(true);
   const inFlight = useRef(false);
-  const voice = useJollyVoice((speaking) => setState(current => current === "thinking" ? current : speaking ? "speaking" : "idle"));
+  const pendingReply = useRef<string | null>(null);
+  const publishReply = () => {
+    const reply = pendingReply.current;
+    if (reply === null) return;
+    pendingReply.current = null;
+    setMessages(current => [...current, { role: "assistant", content: reply }]);
+  };
+  const voice = useJollyVoice((speaking) => {
+    // Reveal the same response when sound actually starts, not when TTS starts loading.
+    if (speaking) publishReply();
+    setState(current => current === "thinking" ? current : speaking ? "speaking" : "idle");
+  });
+  useEffect(() => { if (voice.error) publishReply(); }, [voice.error]);
 
   useEffect(() => { messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" }); }, [messages, state]);
   useEffect(() => {
@@ -80,6 +92,7 @@ export function JollyExperience() {
     const message = question.trim();
     if (!message || inFlight.current) return;
     inFlight.current = true;
+    publishReply();
     voice.stop();
     if (voiceEnabledRef.current) voice.warmUp();
     setInput("");
@@ -92,10 +105,12 @@ export function JollyExperience() {
       const body = (await response.json()) as { reply?: string; voiceToken?: string; error?: string };
       if (!response.ok || !body.reply) throw new Error(body.error || "Jolly could not answer right now.");
       const reply = body.reply;
-      setMessages((current) => [...current, { role: "assistant", content: reply }]);
+      pendingReply.current = reply;
       setState("idle");
-      if (voiceEnabledRef.current) void voice.speak(reply, body.voiceToken);
+      if (voiceEnabledRef.current) await voice.speak(reply, body.voiceToken);
+      else publishReply();
     } catch (caught) {
+      publishReply();
       setState("idle");
       setError(caught instanceof Error ? caught.message : "Jolly could not answer right now.");
     } finally { inFlight.current = false; }
@@ -104,7 +119,7 @@ export function JollyExperience() {
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void askJolly(input); };
   const toggleVoice = () => {
     voiceEnabledRef.current = !voiceEnabledRef.current;
-    if (!voiceEnabledRef.current) { voice.stop(); setState(current => current === "thinking" ? current : "idle"); }
+    if (!voiceEnabledRef.current) { publishReply(); voice.stop(); setState(current => current === "thinking" ? current : "idle"); }
     else voice.warmUp();
     setVoiceEnabled(voiceEnabledRef.current);
   };
@@ -145,21 +160,22 @@ export function JollyExperience() {
               {message.role === "assistant" && <span className={styles.messageMark}>J</span>}<p>{message.content}</p>
             </div>
           ))}
-          {state === "thinking" && <div className={`${styles.message} ${styles.jolly}`}><span className={styles.messageMark}>J</span><p className={styles.typing}><i /><i /><i /></p></div>}
+          {(state === "thinking" || voice.preparing) && <div className={`${styles.message} ${styles.jolly}`}><span className={styles.messageMark}>J</span><p className={styles.typing}><i /><i /><i /></p></div>}
         </div>
         {messages.length < 4 && <div className={styles.starters}>{starters.map((starter) => <button key={starter} type="button" onClick={() => void askJolly(starter)}>{starter}</button>)}</div>}
         <div className={styles.replyAudio}>
-          <audio ref={voice.audioRef} controls preload="auto" hidden={!voice.hasAudio} aria-label="Jolly’s spoken reply" />
-          {voice.canReplay && <button type="button" disabled={voice.preparing || state === "thinking"} onClick={()=>{voiceEnabledRef.current=true;setVoiceEnabled(true);voice.replay();}}>{voice.preparing ? "Preparing voice…" : "▶ Play reply"}</button>}
+          <audio ref={voice.audioRef} preload="auto" hidden aria-label="Jolly’s spoken reply" />
+          {voice.canReplay && !voice.preparing && state !== "thinking" && <button type="button" disabled={voice.preparing || state === "thinking"} onClick={()=>{voiceEnabledRef.current=true;setVoiceEnabled(true);voice.replay();}}>{voice.error ? "Enable sound" : "↻ Replay reply"}</button>}
           {voice.error && <p role="status">{voice.error}</p>}
         </div>
         {error && <p className={styles.error}>{error}</p>}
         <form className={styles.composer} onSubmit={submit}>
           <input value={input} onChange={(event) => setInput(event.target.value)} maxLength={600} placeholder="Ask Jolly anything…" aria-label="Message Jolly" />
-          <button type="submit" disabled={!input.trim() || state === "thinking"} aria-label="Send message"><span>↑</span></button>
+          <button type="submit" disabled={!input.trim() || state === "thinking" || voice.preparing} aria-label="Send message"><span>↑</span></button>
         </form>
         <p className={styles.disclaimer}>{voice.deviceVoice && voiceEnabled ? "Natural voice is unavailable right now. Using your device’s voice. " : ""}Jolly uses AI and may occasionally make mistakes.</p>
       </div>
     </section>
   );
 }
+
