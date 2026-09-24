@@ -24,7 +24,7 @@ export async function GET() {
     const [me] = identity ? await db()`select * from jolly_town_residents where owner_key=${identity.key}` : [];
     const residents: TownResident[] = [guide, ...members.map(resident), ...agents.filter(a => a.status !== "disabled").map((a, i): TownResident => ({ id: "agent:" + a.id, name: a.name, accent: accents[i % accents.length], place: places[i % places.length].id, kind: "agent", role: a.roleName, slug: a.slug }))];
     if (me && !residents.some(r => r.id === String(me.id))) residents.push(resident(me));
-    return json({ residents, me: me ? resident(me) : null, identity: identity ? { name: identity.name, type: identity.wallet ? "wallet" : "x" } : null, events: events.map(e => ({ id: e.id, name: e.name, action: e.action, place: e.place, createdAt: new Date(e.created_at).toISOString() })), memberCount: counts[0].total, tokenConfigured: !!process.env.JOLLY_TOKEN_MINT, xLoginUrl: xConfigured() ? oauthStartUrl("jolly-town") : null });
+    return json({ serverTime: Date.now(), residents, me: me ? resident(me) : null, identity: identity ? { name: identity.name, type: identity.wallet ? "wallet" : "x" } : null, events: events.map(e => ({ id: e.id, name: e.name, action: e.action, place: e.place, createdAt: new Date(e.created_at).toISOString() })), memberCount: counts[0].total, tokenConfigured: !!process.env.JOLLY_TOKEN_MINT, xLoginUrl: xConfigured() ? oauthStartUrl("jolly-town") : null });
   } catch { return json({ error: "The town could not load. Please try again." }, 503); }
 }
 export async function POST(request: NextRequest) {

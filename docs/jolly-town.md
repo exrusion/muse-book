@@ -35,3 +35,11 @@ Run `node --import tsx scripts/test-town-movement.ts` for safe spawns, walking b
 The town contains 12 destinations over a 61 × 49 land footprint (previously 33 × 31). The movement boundary covers approximately 3.1 times the original area. Existing destinations, resident coordinates, and the harbor remain in place. Lantern Market, Storybook Library, Starlight Observatory, Sunrise Heights, Blossom Park, and Sunset Square extend the town north, east, and west.
 
 `lib/jolly-town-layout.ts` is the shared source for building footprints, streets, map coordinates, and movement bounds. The Places menu, joining form, visit API, nearest-place tracking, and guide context use the same destination catalog. No database migration is required. Static city meshes remain merged by material and the visible 3D resident limit is unchanged.
+
+## Time, weather, and offshore ships
+
+The town clock uses `America/New_York` (US Eastern), including daylight saving. Daylight ramps up from 6:00–7:30 AM and down from 6:30–8:00 PM Eastern. Public town responses include server time to anchor the clock; clients update every ten seconds and resync on roster refresh.
+
+Weather is an explicitly simulated, deterministic 45-minute cycle shared by visitors: clear, cloudy, rain, or thunderstorm. The time/weather panel offers local weather previews and a lightning toggle. Storms have a single soft lightning pulse approximately every 40 seconds. Reduced motion disables lightning and movement of rain, clouds, and ships. Three ships follow offshore paths shared by the 3D scene and full map.
+
+Run `node --import tsx scripts/test-town-weather.ts` to verify US Eastern/DST, lighting transitions, weather variety, lightning cadence, and clearance between ships and land.

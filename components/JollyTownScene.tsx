@@ -7,6 +7,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { places, placeFor, residentOffset, spawnPosition, walkable, type TownResident, type PlaceId } from "@/lib/jolly-town-shared";
 import { townBuildings, townLand, townRoads, townTrees, townPonds } from "@/lib/jolly-town-layout";
+import { JollyTownAtmosphere } from "./JollyTownAtmosphere";
+import type { TownEnvironment } from "@/lib/jolly-town-weather";
 import { JollyPlush } from "./JollyPlush";
 import type { TownMotion } from "./useTownMovement";
 import styles from "./JollyTown.module.css";
@@ -112,10 +114,10 @@ function buildCity() {
   return result;
 }
 
-function City() {
+function City({night}:{night:boolean}) {
   const meshes = useMemo(buildCity, []);
   useEffect(() => () => meshes.forEach(m => m.geometry.dispose()), [meshes]);
-  return <group>{meshes.map(m => <mesh key={m.color} geometry={m.geometry} castShadow receiveShadow><meshStandardMaterial color={m.color} roughness={0.85} /></mesh>)}</group>;
+  return <group>{meshes.map(m => <mesh key={m.color} geometry={m.geometry} castShadow receiveShadow><meshStandardMaterial color={m.color} roughness={0.85} emissive={m.color==="#7f9fae"||m.color==="#a9c4ce"||m.color==="#ffedbf"?"#ffcc86":"#000000"} emissiveIntensity={night?0.65:0} /></mesh>)}</group>;
 }
 function Neighbor({ resident, selected, onSelect, speaking, speechLevel, reduced, motion, mine }: { resident: TownResident; selected: boolean; onSelect: () => void; speaking: boolean; speechLevel: RefObject<number>; reduced: boolean; motion:TownMotion; mine:boolean }) {
   const root = useRef<THREE.Group>(null), silent = useRef(0);
@@ -173,7 +175,7 @@ function CameraRig({ focus, zoom, reset, motion }: { focus: PlaceId | null; zoom
   useEffect(() => { if (zoom === lastZoom.current) return; if (controls.current) { const camera = controls.current.object; camera.position.sub(controls.current.target).multiplyScalar(zoom > lastZoom.current ? 0.8 : 1.25).add(controls.current.target); controls.current.update(); } lastZoom.current = zoom; }, [zoom]);
   return <OrbitControls ref={controls} makeDefault minDistance={7} maxDistance={115} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2.2} enablePan={!motion.walking} enableDamping dampingFactor={0.08} />;
 }
-export default function JollyTownScene({ residents, selected, onSelect, onPlace, focus, zoom, reset, night, speaking, speechLevel, onFail, motion, meId }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; focus: PlaceId | null; zoom: number; reset: number; night: boolean; speaking: boolean; speechLevel: RefObject<number>; onFail: () => void; motion:TownMotion; meId?:string }) {
+export default function JollyTownScene({ residents, selected, onSelect, onPlace, focus, zoom, reset, environment, lightning, reducedMotion, speaking, speechLevel, onFail, motion, meId }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; focus: PlaceId | null; zoom: number; reset: number; environment: TownEnvironment; lightning:boolean; reducedMotion:boolean; speaking: boolean; speechLevel: RefObject<number>; onFail: () => void; motion:TownMotion; meId?:string }) {
   const reduced = useRef(false);
   const [mobile, setMobile] = useState(false);
   useEffect(() => { reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches; setMobile(window.innerWidth < 700); }, []);
@@ -182,14 +184,19 @@ export default function JollyTownScene({ residents, selected, onSelect, onPlace,
     const nearby = residents.filter(r => !chosen.includes(r)).sort((a,b) => Number(b.kind === "member"&&b.online)*2-Number(a.kind === "member"&&a.online)*2+Number(b.place === focus)-Number(a.place === focus));
     return [...nearby.slice(0, mobile ? 10 : 22), ...chosen];
   }, [residents, selected, focus, mobile, meId]);
+  const {night,daylight,weather}=environment;
+  const storm=weather==="storm",wet=storm||weather==="rain";
+  const sky=new THREE.Color("#171e38").lerp(new THREE.Color(storm?"#687d91":wet?"#95aab7":weather==="cloudy"?"#bbcbd2":"#c9e2e3"),daylight);
+  const sea=new THREE.Color("#233f5a").lerp(new THREE.Color(wet?"#769aab":"#9acbd4"),daylight);
   return <Canvas shadows dpr={[1,1.5]} camera={{ position: [38.5,44,40.5], fov: 43, near: 0.1, far: 240 }} gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: night ? 0.85 : 1.08 }} onCreated={({gl}) => { gl.domElement.addEventListener("webglcontextlost", onFail, { once: true }); }} aria-label="Interactive 3D Jolly Town. Drag to orbit, pinch or scroll to zoom.">
-    <color attach="background" args={[night ? "#252a4b" : "#c9e2e3"]} />
-    <fog attach="fog" args={[night ? "#252a4b" : "#c9e2e3", 110, 210]} />
-    <ambientLight intensity={night ? 0.5 : 0.65} />
+    <color attach="background" args={[sky]} />
+    <fog attach="fog" args={[sky, wet?65:110, wet?155:210]} />
+    <ambientLight intensity={0.35+daylight*0.3} />
     <hemisphereLight color={night ? "#b7c1fc" : "#fff5e5"} groundColor="#9bbeb6" intensity={1.3} />
-    <directionalLight castShadow position={[-25,50,20]} intensity={night ? 1 : 3} color={night ? "#9ab8ff" : "#fff0d5"} shadow-mapSize={[2048,2048]} shadow-camera-left={-55} shadow-camera-right={55} shadow-camera-top={55} shadow-camera-bottom={-55} shadow-camera-far={130} shadow-normalBias={0.05} shadow-bias={-0.0001} />
-    <mesh rotation={[-Math.PI/2,0,0]} position={[0,-0.5,0]} receiveShadow><planeGeometry args={[180,180]} /><meshStandardMaterial color={night ? "#3d6280" : "#9acbd4"} roughness={0.35} metalness={0.15} /></mesh>
-    <City />
+    <directionalLight castShadow position={[-25,50,20]} intensity={0.6+daylight*(wet?0.7:2.4)} color={night ? "#9ab8ff" : daylight<1 ? "#ffd0a0" : "#fff0d5"} shadow-mapSize={[2048,2048]} shadow-camera-left={-55} shadow-camera-right={55} shadow-camera-top={55} shadow-camera-bottom={-55} shadow-camera-far={130} shadow-normalBias={0.05} shadow-bias={-0.0001} />
+    <mesh rotation={[-Math.PI/2,0,0]} position={[0,-0.5,0]} receiveShadow><planeGeometry args={[180,180]} /><meshStandardMaterial color={sea} roughness={0.35} metalness={0.15} /></mesh>
+    <City night={night} />
+    <JollyTownAtmosphere environment={environment} mobile={mobile} reduced={reducedMotion} lightning={lightning}/>
     {places.map(p => <Html key={p.id} position={[p.x,2.6,p.z]} center distanceFactor={43} zIndexRange={[10,1]}><button className={styles.placeTag} onClick={() => onPlace(p.id)}><span style={{color:p.color}}>{p.icon}</span>{p.name}</button></Html>)}
     {shown.map(r => <Neighbor key={r.id} resident={r} selected={selected === r.id} onSelect={() => onSelect(r.id)} speaking={r.id === "jolly" && speaking} speechLevel={speechLevel} reduced={reduced.current} motion={motion} mine={r.id===meId} />)}
     <CameraRig focus={focus} zoom={zoom} reset={reset} motion={motion} />
