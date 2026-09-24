@@ -37,6 +37,7 @@ create table if not exists jolly_trade_tokens(token text primary key, curve text
  launched_at timestamptz not null, prior_quote numeric(78,0), checked_at timestamptz);
 create table if not exists jolly_trade_engine(key text primary key,value jsonb not null,updated_at timestamptz not null default now());
 alter table jolly_trade_agents add column if not exists model_id text not null default 'claude-haiku-4-5';
+alter table jolly_trade_agents add column if not exists discussion_enabled boolean not null default true;
 alter table jolly_trade_agents add column if not exists share_discussions boolean not null default false;
 alter table jolly_trade_agents add column if not exists next_discussion_at timestamptz not null default now();
 create table if not exists jolly_trade_discussions(

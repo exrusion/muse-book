@@ -34,7 +34,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
    const settings=settingsSchema.safeParse(b.settings);if(!settings.success)throw new TradeError(settings.error.issues[0]?.message||'Check your limits.');
    const open=await positions(id),exposure=open.reduce((s,p)=>s+BigInt(p.entry),0n);
    if(exposure>parseEther(settings.data.budgetEth))throw new TradeError('The new budget is below your current open positions. Close positions first.');
-   await db()`update jolly_trade_agents set settings=${db().json(settings.data)},model_id=${model},share_discussions=${b.shareDiscussions===true},updated_at=now() where id=${id}`;return Response.json({ok:true});
+   await db()`update jolly_trade_agents set settings=${db().json(settings.data)},model_id=${model},share_discussions=${b.shareDiscussions===true},discussion_enabled=${b.discussionEnabled!==false},updated_at=now() where id=${id}`;return Response.json({ok:true});
   }
   if(b.action==='wallet'){await provision(a);return Response.json({ok:true});}
   if(b.action==='refresh'){await refreshAccount(a);return Response.json({ok:true});}

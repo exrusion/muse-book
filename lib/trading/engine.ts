@@ -32,6 +32,7 @@ export async function refreshAccount(a:AgentRow){
  return {a:{...a,cash:cash.toString(),equity:equity.toString(),daily_pnl:dailyPnl.toString(),updated_at:new Date()},ps,fresh};
 }
 async function socialReview(a:AgentRow){
+ if(!a.discussion_enabled)return;
  if(a.next_discussion_at&&new Date(a.next_discussion_at).getTime()>Date.now())return;
  await db()`update jolly_trade_agents set next_discussion_at=now()+interval '5 minutes' where id=${a.id}`;
  const candidates=await db()`select * from jolly_trade_tokens where launched_at>now()-interval '24 hours' order by checked_at desc nulls last,launched_at desc limit 3`;
@@ -93,7 +94,7 @@ export async function tradingCycle(trace=false){
   if(trace)console.log('Jolly trading engine lock acquired');
   await db()`insert into jolly_trade_engine(key,value) values('heartbeat','{}') on conflict(key) do update set updated_at=now()`;
   if(trace)console.log('Jolly trading heartbeat saved');
-  const rows=await db()`select id,status from jolly_trade_agents a where status='running' or (status='paused' and next_discussion_at<now()) or exists(select 1 from jolly_trade_positions p where p.agent_id=a.id and p.status='open') or exists(select 1 from jolly_trade_orders o where o.agent_id=a.id and o.status in ('preparing','signed','broadcast','review')) order by updated_at asc limit 30`;
+  const rows=await db()`select id,status from jolly_trade_agents a where status='running' or (status='paused' and discussion_enabled=true and next_discussion_at<now()) or exists(select 1 from jolly_trade_positions p where p.agent_id=a.id and p.status='open') or exists(select 1 from jolly_trade_orders o where o.agent_id=a.id and o.status in ('preparing','signed','broadcast','review')) order by updated_at asc limit 30`;
   if(trace)console.log('Jolly trading active accounts: '+rows.length);
   if(rows.length){try{await scan();}catch{await db()`insert into jolly_trade_engine(key,value) values('scanner_status','{"ok":false}') on conflict(key) do update set value=excluded.value,updated_at=now()`;}}
   for(const row of rows){try{await tickAgent(row.id);}catch(e){if(e instanceof TradeError&&e.status===409)continue;await block(row.id,e instanceof TradeError?e.message:'Market or wallet service unavailable. New actions are waiting.');}}
