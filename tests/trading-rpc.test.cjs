@@ -1,0 +1,8 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
+const viem=require('viem');
+function chain(){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/trading/chain.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:id=>id==='viem'?viem:id==='./provider'?{bridgeReady:()=>true,bridgeUrl:p=>'https://bridge.test'+p,bridgeHeaders:()=>({Authorization:'Bearer test'})}:id==='../db'?{db:()=>{throw Error('Not used')}}:{},process,Request,JSON});return module.exports;}
+test('real viem transport supplies empty params for chain and block requests',async()=>{
+ const original=global.fetch,calls=[];global.fetch=async(_url,init)=>{const b=JSON.parse(init.body);calls.push(b);assert(Array.isArray(b.params));assert.equal(init.headers.Authorization,'Bearer test');return Response.json({jsonrpc:'2.0',id:b.id,result:b.method==='eth_chainId'?'0x1237':'0x1234'});};
+ try{const c=chain();await c.assertChain();assert.equal(await c.rpc().getBlockNumber(),4660n);assert.deepEqual(calls.map(c=>c.params),[[],[]]);}finally{global.fetch=original;}
+});
+test('RPC normalization preserves contract and signed transaction arguments',()=>{const {explicitRpcParams}=chain();for(const params of [[{to:'0x123',data:'0xab'},'latest'],['0xsigned']]){const input={method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify({jsonrpc:'2.0',id:7,method:'eth_call',params})};const out=explicitRpcParams(new Request('https://bridge.test'),input);assert.deepEqual(JSON.parse(out.body),JSON.parse(input.body));assert.equal(out.headers,input.headers);}});

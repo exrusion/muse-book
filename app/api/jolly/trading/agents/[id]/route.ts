@@ -1,4 +1,5 @@
 import {TRADING_MODELS,discuss,postDecision} from '@/lib/trading/discussion';
+import {reviewError} from '@/lib/trading/errors';
 import {market,scan} from '@/lib/trading/chain';
 import {formatEther} from 'viem';
 import {getAddress,parseEther,verifyMessage,isAddress} from 'viem';
@@ -25,7 +26,15 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
    const [recent]=await db()`select id from jolly_trade_discussions where agent_id=${id} and kind in ('BUY','WAIT','REVIEWING') and created_at>now()-interval '30 seconds' limit 1`;
    if(recent)throw new TradeError('Give your agent a moment before its next review.',429);
    await postDecision(a,'REVIEWING','I’m checking on-chain liquidity and quotes for this coin. This review will not place a trade.',{token:b.token});
-   try{await scan();const [pool]=await db()`select * from jolly_trade_tokens where token=${b.token.toLowerCase()}`;if(!pool)throw new TradeError('This token was not found in verified Pons launches.');const m=await market(pool.token,pool.curve);await discuss(a,{token:b.token,symbol:m.symbol,liquidity:formatEther(m.liquidity),ageMinutes:null,quoteChange:null});}catch(e){await postDecision(a,'WAIT',e instanceof TradeError?e.message:'I could not verify a fresh market quote. I will wait.',{token:b.token});throw e;}
+   let stage:'discovery'|'quote'|'model'='discovery';
+   try{
+    let [pool]=await db()`select * from jolly_trade_tokens where token=${b.token.toLowerCase()}`;
+    // Existing verified launches do not depend on a successful new-launch scan.
+    if(!pool){await scan();[pool]=await db()`select * from jolly_trade_tokens where token=${b.token.toLowerCase()}`;}
+    if(!pool)throw new TradeError('This token was not found in verified Pons launches.');
+    stage='quote';const m=await market(pool.token,pool.curve);
+    stage='model';await discuss(a,{token:pool.token,symbol:m.symbol,liquidity:formatEther(m.liquidity),ageMinutes:Math.floor((Date.now()-new Date(pool.launched_at).getTime())/60000),quoteChange:null,graduated:m.graduated});
+   }catch(e){const error=reviewError(stage,e);await postDecision(a,'ERROR',error.message,{token:b.token});throw error;}
    return Response.json({ok:true});
   }
   if(b.action==='settings'){

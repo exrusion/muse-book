@@ -1,3 +1,4 @@
+import {reviewError,reportTradingError} from './errors';
 import {discuss,postDecision} from './discussion';
 import {formatEther,parseEther,getAddress} from 'viem';
 import {db} from '../db';
@@ -35,9 +36,18 @@ async function socialReview(a:AgentRow){
  if(!a.discussion_enabled)return;
  if(a.next_discussion_at&&new Date(a.next_discussion_at).getTime()>Date.now())return;
  await db()`update jolly_trade_agents set next_discussion_at=now()+interval '5 minutes' where id=${a.id}`;
- const candidates=await db()`select * from jolly_trade_tokens where launched_at>now()-interval '24 hours' order by checked_at desc nulls last,launched_at desc limit 3`;
- for(const t of candidates){try{const m=await market(t.token,t.curve);if(m.liquidity<=0n)continue;await discuss(a,{token:t.token,symbol:m.symbol,liquidity:formatEther(m.liquidity),ageMinutes:Math.floor((Date.now()-new Date(t.launched_at).getTime())/60000),quoteChange:null});return;}catch{continue;}}
- await postDecision(a,'STATUS','I’m waiting for a verified coin quote. Trading is paused; these reviews will not submit orders.');
+ // Reviews can discuss older coins; entry eligibility still uses the 24h window.
+ // Rotate per agent instead of repeatedly picking the same three global rows.
+ const candidates=await db()`select t.* from jolly_trade_tokens t order by
+  (select max(d.created_at) from jolly_trade_discussions d where d.agent_id=${a.id} and d.token=t.token) asc nulls first,
+  t.launched_at desc limit 3`;
+ let failure:TradeError|undefined;
+ for(const t of candidates){
+  let m;try{m=await market(t.token,t.curve);}catch(e){failure=reviewError('quote',e);continue;}
+  try{await discuss(a,{token:t.token,symbol:m.symbol,liquidity:formatEther(m.liquidity),ageMinutes:Math.floor((Date.now()-new Date(t.launched_at).getTime())/60000),quoteChange:null,graduated:m.graduated});return;}
+  catch(e){failure=reviewError('model',e);break;}
+ }
+ await block(a.id,failure?.message||'No verified Pons launches are available yet. I’m scanning for coins to review.');
 }
 export async function tickAgent(id:string){
  await locked('trade:'+id,async()=>{
@@ -66,12 +76,12 @@ export async function tickAgent(id:string){
   if(Date.now()-since<policy.interval*1000)return;
   const exposure=refreshed.ps.reduce((s,p)=>s+BigInt(p.entry),0n);
   const blocked=entryBlock(a.settings,{cash:BigInt(a.cash),exposure,dailySpend:BigInt(a.day_spend),dailyPnl:BigInt(a.daily_pnl),trades:a.day_trades,positions:refreshed.ps.length,pending:false,fresh:refreshed.fresh,gas:a.mode==='paper'?PAPER_GAS:GAS_RESERVE});
-  if(blocked){await block(id,blocked);return;}
+  if(blocked){await block(id,blocked);await socialReview(a);return;}
   await db()`update jolly_trade_agents set last_review_at=now() where id=${id}`;
   const tokens=await db()`select * from jolly_trade_tokens where launched_at<now()-${policy.minAge}*interval '1 second' and launched_at>now()-interval '24 hours' order by checked_at asc nulls first,launched_at desc limit 6`;
   for(const t of tokens){
    if(refreshed.ps.some(p=>p.token===t.token))continue;
-   const m=await market(t.token,t.curve),unit=m.buy(parseEther('0.001'));
+   let m;try{m=await market(t.token,t.curve);}catch(e){reportTradingError('candidate_quote',e);continue;}const unit=m.buy(parseEther('0.001'));
    const previous=t.prior_quote?BigInt(t.prior_quote):null;
    await db()`update jolly_trade_tokens set symbol=${m.symbol},prior_quote=${unit.toString()},checked_at=now() where token=${t.token}`;
    if(m.graduated||m.fees>800n||m.liquidity<parseEther(String(policy.minLiquidity))||unit<=0n)continue;
@@ -86,7 +96,7 @@ export async function tickAgent(id:string){
    if(check){await block(id,check);return;}
    await buy(a,t.token,t.curve);await block(id,a.mode==='paper'?'Practice entry recorded':'Entry submitted');return;
   }
-  await block(id,'Scanning for a Pons launch that meets your agent’s filters');
+  await block(id,'Scanning for a Pons launch that meets your agent’s filters');await socialReview(a);
  });
 }
 export async function tradingCycle(trace=false){
@@ -96,8 +106,8 @@ export async function tradingCycle(trace=false){
   if(trace)console.log('Jolly trading heartbeat saved');
   const rows=await db()`select id,status from jolly_trade_agents a where status='running' or (status='paused' and discussion_enabled=true and next_discussion_at<now()) or exists(select 1 from jolly_trade_positions p where p.agent_id=a.id and p.status='open') or exists(select 1 from jolly_trade_orders o where o.agent_id=a.id and o.status in ('preparing','signed','broadcast','review')) order by updated_at asc limit 30`;
   if(trace)console.log('Jolly trading active accounts: '+rows.length);
-  if(rows.length){try{await scan();}catch{await db()`insert into jolly_trade_engine(key,value) values('scanner_status','{"ok":false}') on conflict(key) do update set value=excluded.value,updated_at=now()`;}}
-  for(const row of rows){try{await tickAgent(row.id);}catch(e){if(e instanceof TradeError&&e.status===409)continue;await block(row.id,e instanceof TradeError?e.message:'Market or wallet service unavailable. New actions are waiting.');}}
+  if(rows.length){try{await scan();}catch(e){reportTradingError('scanner',e);await db()`insert into jolly_trade_engine(key,value) values('scanner_status','{"ok":false}') on conflict(key) do update set value=excluded.value,updated_at=now()`;}}
+  for(const row of rows){await db()`update jolly_trade_engine set updated_at=now() where key='heartbeat'`;try{await tickAgent(row.id);}catch(e){if(e instanceof TradeError&&e.status===409)continue;reportTradingError('agent_cycle',e);await block(row.id,e instanceof TradeError?e.message:'Market or wallet service unavailable. New actions are waiting.');}}
   await db()`update jolly_trade_engine set updated_at=now() where key='heartbeat'`;
  });
 }
