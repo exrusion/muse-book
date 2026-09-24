@@ -112,10 +112,17 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
     if (!token || !audio) { fallback(id, clean); return; }
     setPreparing(true);
     const controller = new AbortController(); abort.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 12_000);
+    const timeout = setTimeout(() => controller.abort(), 25_000);
     try {
       const response = await fetch("/api/jolly/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }), signal: controller.signal });
-      if (!response.ok) throw new Error("Voice unavailable");
+      if (!response.ok) {
+        const problem = await response.json().catch(() => null);
+        if (problem?.naturalVoice) {
+          if (id === sequence.current) { finish(); setPreparing(false); setError(problem.error || "Natural voice is unavailable. Please retry."); }
+          return;
+        }
+        throw new Error("Voice unavailable");
+      }
       const blob = await response.blob(); if (id !== sequence.current) return;
       objectUrl.current = URL.createObjectURL(blob); audio.src = objectUrl.current; audio.load(); setHasAudio(true);
       if (context.current) {
