@@ -5,6 +5,7 @@ import {curveAbi,tokenAbi,rpc,market} from './chain';
 import {TradeError,positions,pending,type AgentRow,type OrderRow,type PositionRow} from './store';
 import {signAndBroadcast} from './wallet';
 import {PAPER_GAS} from './risk';
+import {bridgeReady,bridgeUrl,bridgeHeaders,exitProviderReady} from './provider';
 export const WETH='0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73' as Address;
 const wethAbi=parseAbi(['function withdraw(uint256)','event Withdrawal(address indexed src,uint256 wad)']);
 export async function newOrder(a:AgentRow,data:{kind:OrderRow['kind'];amount:bigint;token?:string;curve?:string;symbol?:string;positionId?:string;tokenAmount?:bigint;minimum?:bigint;destination?:string;requestKey?:string}){
@@ -74,9 +75,9 @@ export async function buy(a:AgentRow,token:string,curve:string){
 }
 function allowedTarget(address:string){return (process.env.JOLLY_ZEROX_ALLOWED_TARGETS||'').toLowerCase().split(',').map(s=>s.trim()).includes(address.toLowerCase());}
 export async function graduatedQuote(a:AgentRow,p:PositionRow){
- if(!process.env.JOLLY_ZEROX_API_KEY)throw new TradeError('Graduated exit provider is not configured.',503);
+ if(!exitProviderReady())throw new TradeError('Graduated exit provider is not configured.',503);
  const query=new URLSearchParams({chainId:'4663',sellToken:p.token,buyToken:WETH,sellAmount:p.amount,taker:a.wallet_address!,slippageBps:String(a.settings.slippageBps)});
- const r=await fetch('https://api.0x.org/swap/allowance-holder/quote?'+query,{headers:{'0x-api-key':process.env.JOLLY_ZEROX_API_KEY,'0x-version':'v2'},signal:AbortSignal.timeout(15000),redirect:'error'});
+ const r=await fetch(bridgeReady()?bridgeUrl('/api/integrations/jolly/quote?')+query:'https://api.0x.org/swap/allowance-holder/quote?'+query,{headers:bridgeReady()?bridgeHeaders():{'0x-api-key':process.env.JOLLY_ZEROX_API_KEY!,'0x-version':'v2'},signal:AbortSignal.timeout(20000),redirect:'error'});
  if(!r.ok)throw new TradeError('A graduated-token exit quote is unavailable.',503);
  const q=await r.json();
  if(q.liquidityAvailable===false||!q.transaction||!allowedTarget(q.transaction.to)||!/^\d+$/.test(q.minBuyAmount)||BigInt(q.minBuyAmount)<=0n||q.buyToken?.toLowerCase()!==WETH.toLowerCase()||q.sellToken?.toLowerCase()!==p.token.toLowerCase()||String(q.sellAmount)!==p.amount||BigInt(q.transaction.value||'0')!==0n||!/^0x[0-9a-f]+$/i.test(q.transaction.data))throw new TradeError('Exit route failed validation.');

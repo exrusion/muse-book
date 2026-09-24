@@ -2,11 +2,17 @@
 
 The `/trade` desk supports X sessions and signed EVM wallet login. Each account can create one agent per strategy and mode. Practice agents use simulated ETH and on-chain Pons V2 native-pair quotes; they never sign transactions. Practice fills include slippage and a fixed gas estimate, so results are not a promise of live execution. Graduated positions in practice mode cannot currently be priced or closed and remain visibly open.
 
-Live agents use a separate Privy managed wallet per user and strategy. These are operator-managed wallets, not user-controlled smart accounts. The server authorization key can sign for them. No agent receives direct signing access: the backend validates policy, simulates a fixed transaction, verifies the returned signature, and persists signed bytes before broadcasting. A PostgreSQL advisory lock serializes each agent across web and worker processes. Retries rebroadcast identical signed bytes. Unknown outcomes require reconciliation before further transactions.
+Live agents use a separate random wallet per user and strategy. Wallet keys are AES-256-GCM encrypted in a separate database table; authenticated encryption binds the key to the owner, agent, address and chain. The encryption key is a Railway shared secret referenced by web and worker. Preserve and back up that secret before rotating or migrating services: it is required to recover funds. Existing Privy wallets remain supported. These are operator-managed wallets, not user-controlled smart accounts. No AI receives signing keys: the backend validates policy, simulates a fixed transaction, verifies the returned signature, and persists signed bytes before broadcasting. A PostgreSQL advisory lock serializes each agent across web and worker processes. Retries rebroadcast identical signed bytes. Unknown outcomes require reconciliation before further transactions.
 
 ## Configuration
 
 Set these on the web service and reference the same values from the worker:
+
+- `JOLLY_WALLET_ENCRYPTION_KEY`: random 32-byte key encoded as 64 hex characters, server only. Store once in Railway shared variables and reference it from both services. Never regenerate it on deploy.
+- `JOLLY_EXECUTION_SERVICE_URL`: Robin Trades integration origin.
+- `JOLLY_EXECUTION_SERVICE_TOKEN`: dedicated random service token matching `JOLLY_SERVICE_TOKEN` in Robin Trades. The authenticated service supplies RPC and 0x exit quotes using its existing provider configuration; it never exports provider secrets or uses the Robin Trades wallet to trade for Jolly.
+- With that service configured, standalone RPC and 0x credentials below are optional. The allowlisted 0x target must still be set and verified.
+- Privy credentials below are only required for existing or explicitly selected Privy wallets.
 
 - `JOLLY_PRIVY_APP_ID`: Privy application ID.
 - `JOLLY_PRIVY_APP_SECRET`: Privy application secret, server only.

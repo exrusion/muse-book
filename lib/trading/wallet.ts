@@ -4,12 +4,24 @@ import {getAddress,keccak256,parseTransaction,recoverTransactionAddress,toHex,pa
 import {db} from '../db';
 import {rpc,assertChain} from './chain';
 import {TradeError,type AgentRow,type OrderRow,pending} from './store';
-export const walletReady=()=>Boolean(process.env.JOLLY_PRIVY_APP_ID&&process.env.JOLLY_PRIVY_APP_SECRET&&process.env.JOLLY_PRIVY_AUTH_KEY);
-export const liveReady=()=>walletReady()&&process.env.JOLLY_TRADING_LIVE_ENABLED==='true'&&Boolean(process.env.JOLLY_TRADING_RPC_URL&&process.env.JOLLY_ZEROX_API_KEY&&process.env.JOLLY_ZEROX_ALLOWED_TARGETS);
+import {createLocalWallet,unlockLocalWallet,localWalletReady} from './key-vault';
+import {bridgeReady,exitProviderReady} from './provider';
+const privyReady=()=>Boolean(process.env.JOLLY_PRIVY_APP_ID&&process.env.JOLLY_PRIVY_APP_SECRET&&process.env.JOLLY_PRIVY_AUTH_KEY);
+export const walletReady=()=>localWalletReady()||privyReady();
+export const liveReady=()=>walletReady()&&process.env.JOLLY_TRADING_LIVE_ENABLED==='true'&&Boolean((bridgeReady()||process.env.JOLLY_TRADING_RPC_URL)&&exitProviderReady()&&process.env.JOLLY_ZEROX_ALLOWED_TARGETS);
 function privy(){if(!walletReady())throw new TradeError('Managed wallets are awaiting provider setup.',503);return new PrivyClient({appId:process.env.JOLLY_PRIVY_APP_ID!,appSecret:process.env.JOLLY_PRIVY_APP_SECRET!,maxRetries:0,timeout:20000});}
 export async function provision(a:AgentRow){
  if(a.wallet_id)return;
  if(!liveReady())throw new TradeError('Live wallets are not enabled yet. You can use practice mode now.',503);
+ if(localWalletReady()){
+  const w=createLocalWallet(a.id,a.owner_key);
+  await db().begin(async sql=>{
+   const [row]=await sql`select wallet_id from jolly_trade_agents where id=${a.id} for update`;
+   if(row.wallet_id)return;
+   await sql`insert into jolly_trade_wallet_keys(agent_id,encrypted_key) values(${a.id},${w.envelope})`;
+   await sql`update jolly_trade_agents set wallet_id=${'local:'+a.id},wallet_address=${w.address},updated_at=now() where id=${a.id}`;
+  });return;
+ }
  const p=privy();
  // Durable external ID prevents duplicate wallets even beyond idempotency expiry.
  let w;
@@ -29,8 +41,16 @@ export async function signAndBroadcast(a:AgentRow,o:OrderRow,tx:{to:Address;data
  const gas=gasEstimate*120n/100n;
  if(gas>1500000n||gas*gasPrice>parseEther('0.001'))throw new TradeError('Network fee exceeds the transaction limit.');
  if(balance<tx.value+gas*gasPrice)throw new TradeError('Insufficient ETH for this action and network fees.');
- const result=await privy().wallets().ethereum().signTransaction(a.wallet_id,{authorization_context:{authorization_private_keys:[process.env.JOLLY_PRIVY_AUTH_KEY!]},idempotency_key:o.id,params:{transaction:{chain_id:4663,type:0,nonce,to:tx.to,data:tx.data,value:toHex(tx.value),gas_limit:toHex(gas),gas_price:toHex(gasPrice)}}});
- const raw=result.signed_transaction as Hex,decoded=parseTransaction(raw);
+ let raw:Hex;
+ if(a.wallet_id==='local:'+a.id){
+  const [key]=await db()`select encrypted_key from jolly_trade_wallet_keys where agent_id=${a.id}`;
+  if(!key)throw new TradeError('Agent wallet is unavailable.',503);
+  const signer=unlockLocalWallet(key.encrypted_key,a.id,a.owner_key,a.wallet_address);
+  raw=await signer.signTransaction({chainId:4663,type:'legacy',nonce,to:tx.to,data:tx.data,value:tx.value,gas,gasPrice});
+ }else{
+  const result=await privy().wallets().ethereum().signTransaction(a.wallet_id,{authorization_context:{authorization_private_keys:[process.env.JOLLY_PRIVY_AUTH_KEY!]},idempotency_key:o.id,params:{transaction:{chain_id:4663,type:0,nonce,to:tx.to,data:tx.data,value:toHex(tx.value),gas_limit:toHex(gas),gas_price:toHex(gasPrice)}}});raw=result.signed_transaction as Hex;
+ }
+ const decoded=parseTransaction(raw);
  if(decoded.chainId!==4663||decoded.to?.toLowerCase()!==tx.to.toLowerCase()||(decoded.value||0n)!==tx.value||(decoded.data||'0x')!==tx.data||decoded.nonce!==nonce||decoded.gas!==gas||decoded.gasPrice!==gasPrice||(await recoverTransactionAddress({serializedTransaction:raw as TransactionSerialized})).toLowerCase()!==account.toLowerCase())throw new TradeError('Signed transaction validation failed.');
  const hash=keccak256(raw);
  // Save signed bytes and deterministic hash BEFORE broadcast. Crashes cannot cause a second payment.

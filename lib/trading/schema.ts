@@ -13,6 +13,10 @@ create table if not exists jolly_trade_agents(
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique(owner_key,template,mode)
 );
 create index if not exists jolly_trade_agents_owner on jolly_trade_agents(owner_key);
+create table if not exists jolly_trade_wallet_keys(
+ agent_id uuid primary key references jolly_trade_agents(id),
+ encrypted_key text not null, created_at timestamptz not null default now()
+);
 create table if not exists jolly_trade_positions(
  id uuid primary key default gen_random_uuid(), agent_id uuid not null references jolly_trade_agents(id),
  token text not null, curve text not null, symbol text not null, amount numeric(78,0) not null,
