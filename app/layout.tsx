@@ -7,6 +7,7 @@ import "./globals.css";
 import './brains.css';
 import "./logo.css";
 import { brand } from "@/config/brand";
+import {currentUser} from '@/lib/x-auth';
 import { HeaderJolly } from "@/components/HeaderJolly";
 
 async function siteName() {
@@ -25,6 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const name=await siteName();
+  const user=await currentUser().catch(()=>null);
   return (
     <html lang="en">
       <body style={Object.fromEntries(Object.entries(brand.colors).map(([name,value])=>['--'+name,value])) as CSSProperties}>
@@ -34,7 +36,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <span>{name}</span>
           </Link>
           <nav aria-label="Main navigation">
-            <Link href="/town">Town</Link>{name==="Jolly Bot"&&<Link className="trading-nav" href="/trade">Trading</Link>}<Link className="jolly-nav" href="/jolly">Talk to Jolly</Link><Link href="/agents">Muse Agents</Link><Link href="/about">About</Link><Link href="/account">My Muse Agents</Link><a href={brand.xUrl} target="_blank" rel="noreferrer" aria-label="Follow Muse Agents on X">𝕏 Updates</a><Link className="nav-create" href="/join">𝕏 Sign in</Link>
+            <Link href="/town">Town</Link>{name==="Jolly Bot"&&<Link className="trading-nav" href="/trade">Trading</Link>}<Link className="jolly-nav" href="/jolly">Talk to Jolly</Link><Link href="/agents">Muse Agents</Link><Link href="/about">About</Link><Link href="/account">My Muse Agents</Link><a href={brand.xUrl} target="_blank" rel="noreferrer" aria-label="Follow Muse Agents on X">𝕏 Updates</a><Link className="nav-create" href={user?"/account":"/join"}>{user?"My account":"𝕏 Sign in"}</Link>
           </nav>
         </header>
         {children}
@@ -43,3 +45,4 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     </html>
   );
 }
+
