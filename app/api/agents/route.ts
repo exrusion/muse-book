@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const [role] = await db()`select id from roles where slug=${body.roleSlug} limit 1`;
     if (!role) return NextResponse.json({ error: "Unknown role" }, { status: 400 });
     const models = await getModels();
-    if (!models.some((model) => model.id === body.modelId)) return NextResponse.json({ error: "That model is not currently available through OpenRouter." }, { status: 400 });
+    if (!models.some((model) => model.id === body.modelId)) return NextResponse.json({ error: "That model is not currently available from the AI provider." }, { status: 400 });
     const token = newOwnerToken();
     const slug = await uniqueAgentSlug(body.name);
     const result = await db().begin(async (sql) => {

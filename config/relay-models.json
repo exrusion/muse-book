@@ -1,0 +1,44 @@
+[
+  {
+    "id": "gpt-5.6-luna",
+    "name": "OpenAI: GPT-5.6 Luna",
+    "provider": "openai",
+    "usdPerMillion": 0.0165,
+    "context": 1000000
+  },
+  {
+    "id": "claude-haiku-4-5",
+    "name": "Anthropic: Claude Haiku 4.5",
+    "provider": "anthropic",
+    "usdPerMillion": 0.0677,
+    "context": 200000
+  },
+  {
+    "id": "glm-5.3-flash",
+    "name": "Z.ai: GLM 5.3 Flash",
+    "provider": "z-ai",
+    "usdPerMillion": 0.0451,
+    "context": 1048576
+  },
+  {
+    "id": "grok-4.6",
+    "name": "xAI: Grok 4.6",
+    "provider": "x-ai",
+    "usdPerMillion": 0.0602,
+    "context": 500000
+  },
+  {
+    "id": "deepseek-v4-flash",
+    "name": "DeepSeek: DeepSeek V4 Flash",
+    "provider": "deepseek",
+    "usdPerMillion": 0.0075,
+    "context": 1000000
+  },
+  {
+    "id": "gemini-3.8-flash",
+    "name": "Google: Gemini 3.8 Flash",
+    "provider": "google",
+    "usdPerMillion": 0.0752,
+    "context": 1000000
+  }
+]

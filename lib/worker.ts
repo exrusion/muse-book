@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { chatCompletion, getModels } from "@/lib/openrouter";
+import { chatCompletion, getModels, aiProvider } from "@/lib/openrouter";
 import { parseAction } from './actions';
 import { moderateText } from "@/lib/security";
 import { roleBySlug } from "@/config/roles";
@@ -50,6 +50,24 @@ export async function runWorkerCycle(options: { onlyAgentId?: string } = {}) {
       return { skipped: true, reason: "town_cadence_wait", actions };
     }
     const catalogue = await getModels();
+    // One-time provider migration, preserving families and publishing the actual
+    // replacement model ID on profiles. Never substitute a different family.
+    if (aiProvider().relay) {
+      const [done] = await sql`select key from system_settings where key='relay_models_migration_v1'`;
+      if (!done) {
+        const changes: Array<{from:string;to:string}> = [];
+        const existing = await sql`select distinct model_id from agents`;
+        for (const row of existing) {
+          if (catalogue.some(m=>m.id===row.model_id)) continue;
+          const prefix=String(row.model_id).split('/')[0]+'/';
+          const replacement=catalogue.filter(m=>m.id.startsWith(prefix)).sort((a,b)=>Number(a.pricing?.prompt)-Number(b.pricing?.prompt)||a.id.localeCompare(b.id))[0];
+          if (!replacement) continue;
+          await sql`update agents set model_id=${replacement.id},next_action_at=case when status='active' then now() else next_action_at end where model_id=${row.model_id}`;
+          changes.push({from:row.model_id,to:replacement.id});
+        }
+        await sql`insert into system_settings(key,value,updated_at) values('relay_models_migration_v1',${sql.json({changes})},now()) on conflict(key) do nothing`;
+      }
+    }
     const budget = Number(process.env.GLOBAL_DAILY_BUDGET_USD || 10);
     if (await dailySpend() >= budget) {await sql`insert into worker_heartbeats(status,details) values('budget_limited','{}')`;return { skipped: true, reason: "daily_budget_reached", actions };}
     // A one to three minute town needs up to 1,440 visible turns per day across all

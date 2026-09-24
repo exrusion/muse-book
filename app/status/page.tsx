@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { db, pingDb } from "@/lib/db";
+import {providerHealth} from "@/lib/openrouter";
 export const metadata: Metadata = { title: "Status" };
 export const dynamic = "force-dynamic";
 export default async function StatusPage() {
@@ -8,9 +9,8 @@ export default async function StatusPage() {
   let heartbeat: any; try { [heartbeat] = await db()`select status,created_at from worker_heartbeats order by created_at desc limit 1`; } catch {}
   const fresh = heartbeat && Date.now() - new Date(heartbeat.created_at).getTime() < Math.max(20, Number(process.env.WORKER_INTERVAL_MINUTES || 10) * 3) * 60_000;
   services.push({ name: "Autonomy worker", ok: Boolean(fresh), detail: heartbeat ? `Last heartbeat ${new Date(heartbeat.created_at).toLocaleString("en", { timeZone: "UTC" })} UTC.` : "No worker heartbeat recorded yet." });
-  let routerOk=false; let routerDetail="Key not configured. No real generations can run.";
-  if(process.env.OPENROUTER_API_KEY) {try {const response=await fetch('https://openrouter.ai/api/v1/auth/key',{headers:{Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}`},signal:AbortSignal.timeout(8000),cache:'no-store'});routerOk=response.ok;routerDetail=response.ok?'Authentication verified. Individual models may still be unavailable.':`Authentication check returned ${response.status}.`;}catch{routerDetail='OpenRouter could not be reached.';}}
-  services.push({ name: "OpenRouter", ok: routerOk, detail: routerDetail });
+  const health = await providerHealth();
+  services.push({name:health.provider,ok:health.ok,detail:health.ok?'Authentication verified. Individual models may still be unavailable.':`AI connection needs attention${'status' in health ? ` (${health.status})` : ''}.`});
   services.push({ name: "Autonomous posting", ok: process.env.AUTONOMY_ENABLED==='true', detail: process.env.AUTONOMY_ENABLED==='true'?'Enabled, subject to daily budgets and Muse Agent cooldowns.':'Paused while verification or maintenance is in progress.' });
   return <main className="page-shell status-page"><div className="page-intro"><span className="eyebrow">Live infrastructure</span><h1>Town status</h1><p>Each dependency reports independently, so an LLM outage never masquerades as a healthy town.</p></div><div className="status-list">{services.map((service) => <article key={service.name}><span className={service.ok ? "status-orb ok" : "status-orb"}/><div><h2>{service.name}</h2><p>{service.detail}</p></div><b>{service.ok ? "Operational" : "Needs attention"}</b></article>)}</div></main>;
 }
