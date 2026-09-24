@@ -1,3 +1,6 @@
+import {TRADING_MODELS,discuss,postDecision} from '@/lib/trading/discussion';
+import {market,scan} from '@/lib/trading/chain';
+import {formatEther} from 'viem';
 import {getAddress,parseEther,verifyMessage,isAddress} from 'viem';
 import {z} from 'zod';
 import {db} from '@/lib/db';
@@ -17,12 +20,21 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
   if(b.action==='pause'){await db()`update jolly_trade_agents set status=case when status='review' then 'review' else 'paused' end,updated_at=now() where id=${id}`;return Response.json({ok:true});}
   if(a.status==='review')throw new TradeError('This agent needs transaction reconciliation before changes can be made.',409);
   if((await pending(id)).length)throw new TradeError('Wait for the pending transaction to finish.',409);
+  if(b.action==='analyze'){
+   if(!isAddress(b.token))throw new TradeError('Enter a Pons token contract address.');
+   const [recent]=await db()`select id from jolly_trade_discussions where agent_id=${id} and kind in ('BUY','WAIT','REVIEWING') and created_at>now()-interval '30 seconds' limit 1`;
+   if(recent)throw new TradeError('Give your agent a moment before its next review.',429);
+   await postDecision(a,'REVIEWING','I’m checking on-chain liquidity and quotes for this coin. This review will not place a trade.',{token:b.token});
+   try{await scan();const [pool]=await db()`select * from jolly_trade_tokens where token=${b.token.toLowerCase()}`;if(!pool)throw new TradeError('This token was not found in verified Pons launches.');const m=await market(pool.token,pool.curve);await discuss(a,{token:b.token,symbol:m.symbol,liquidity:formatEther(m.liquidity),ageMinutes:null,quoteChange:null});}catch(e){await postDecision(a,'WAIT',e instanceof TradeError?e.message:'I could not verify a fresh market quote. I will wait.',{token:b.token});throw e;}
+   return Response.json({ok:true});
+  }
   if(b.action==='settings'){
    if(a.status==='running')throw new TradeError('Pause entries before changing limits.');
+   const model=typeof b.modelId==='string'?b.modelId:a.model_id;if(!TRADING_MODELS.some(m=>m.id===model))throw new TradeError('Choose an available AI brain.');
    const settings=settingsSchema.safeParse(b.settings);if(!settings.success)throw new TradeError(settings.error.issues[0]?.message||'Check your limits.');
    const open=await positions(id),exposure=open.reduce((s,p)=>s+BigInt(p.entry),0n);
    if(exposure>parseEther(settings.data.budgetEth))throw new TradeError('The new budget is below your current open positions. Close positions first.');
-   await db()`update jolly_trade_agents set settings=${db().json(settings.data)},updated_at=now() where id=${id}`;return Response.json({ok:true});
+   await db()`update jolly_trade_agents set settings=${db().json(settings.data)},model_id=${model},share_discussions=${b.shareDiscussions===true},updated_at=now() where id=${id}`;return Response.json({ok:true});
   }
   if(b.action==='wallet'){await provision(a);return Response.json({ok:true});}
   if(b.action==='refresh'){await refreshAccount(a);return Response.json({ok:true});}
