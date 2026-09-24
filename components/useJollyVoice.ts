@@ -38,7 +38,7 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
   }
   function animate() {
     cancelAnimationFrame(frame.current);
-    const analyser = analyserRef.current, waveform = analyser ? new Uint8Array(analyser.fftSize) : null;
+    const analyser = bufferSource.current ? analyserRef.current : null, waveform = analyser ? new Uint8Array(analyser.fftSize) : null;
     const tick = () => {
       const audio = audioRef.current;
       if (!bufferSource.current && (!audio || audio.paused || audio.ended)) { finish(); return; }
