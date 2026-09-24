@@ -1,10 +1,17 @@
+import { townBounds, townBuildings, townPonds } from "./jolly-town-layout";
 export const places = [
   { id: "plaza", name: "Jolly Plaza", icon: "✦", x: 0, z: 0, color: "#b59ade", description: "The heart of the town. Meet your neighbors and make yourself at home." },
   { id: "cafe", name: "Cloud Café", icon: "☕", x: -9, z: 3, color: "#eaa991", description: "A warm corner for small talk, big ideas, and one more coffee." },
   { id: "garden", name: "Daydream Gardens", icon: "❀", x: 8, z: 4, color: "#8abe9b", description: "Take the scenic route. A little green space to slow things down." },
   { id: "studio", name: "Muse Studios", icon: "✧", x: -8, z: -7, color: "#8ebad4", description: "A neighborhood for makers, curious minds, and things that do not exist yet." },
   { id: "homes", name: "Moonrise Homes", icon: "⌂", x: 8, z: -7, color: "#dbb877", description: "Your own little place in a town full of familiar faces." },
-  { id: "harbor", name: "Peach Harbor", icon: "≈", x: 0, z: 10, color: "#dc9dac", description: "Meet by the water and watch the world drift by." }
+  { id: "harbor", name: "Peach Harbor", icon: "≈", x: 0, z: 10, color: "#dc9dac", description: "Meet by the water and watch the world drift by." },
+  { id: "market", name: "Lantern Market", icon: "◇", x: -22, z: -5, color: "#d69a73", description: "Stroll past colorful market stalls and meet your neighbors along the west avenue." },
+  { id: "library", name: "Storybook Library", icon: "▤", x: -22, z: -22, color: "#aa94c3", description: "A quiet northern quarter for sharing stories and finding your next big idea." },
+  { id: "observatory", name: "Starlight Observatory", icon: "☆", x: 0, z: -23, color: "#8e9ed1", description: "Follow the northern boulevard to the domed observatory and its open courtyard." },
+  { id: "heights", name: "Sunrise Heights", icon: "⌂", x: 22, z: -22, color: "#d9b97f", description: "Tree-lined streets and pastel homes on the bright side of town." },
+  { id: "park", name: "Blossom Park", icon: "❀", x: 22, z: -7, color: "#c89daf", description: "A spacious park with blossom trees, a garden pavilion, and room to wander." },
+  { id: "square", name: "Sunset Square", icon: "☀", x: -22, z: 10, color: "#ddac94", description: "A relaxed neighborhood square near the waterfront. Take the long way home." }
 ] as const;
 export type PlaceId = typeof places[number]["id"];
 export const accents = ["#b59ade", "#eaa991", "#8abe9b", "#8ebad4", "#dbb877", "#dc9dac"] as const;
@@ -19,15 +26,12 @@ export function residentOffset(id: string): [number, number] {
   return [Math.sin(angle) * radius, Math.cos(angle) * radius];
 }
 export const WALK_SPEED = 4;
-// Footprints match the buildings in JollyTownScene, with room for a plush body.
-export const townObstacles = [
-  [-10,-10.5,3.2,2.7],[-13.7,-7,2.5,2.5],[-8.8,-6.3,2.8,2],[-1.8,-10,3,3],[2,-9.5,2.5,2.8],
-  [9,-11,3,2.6],[13,-8.5,2.5,2.5],[9,-6.5,2.5,1.8],[-12.5,1.3,3.2,2.5],
-  [-12.7,11,3,2.5],[-8.5,11.5,2.5,2.5],[12.4,11,3.2,3],[8.2,11.7,2.6,2.4]
-];
+// Collision footprints come from the same buildings drawn in 3D and on the map.
+export const townObstacles = townBuildings.map(([x,z,w,d]) => [x,z,w,d] as const);
+export const placeIds = places.map(p => p.id) as [PlaceId, ...PlaceId[]];
 export function walkable(x: number, z: number) {
-  if (!Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x)>15.4 || z < -14.2 || z > 14.2) return false;
-  if (Math.hypot(x,z)<1.65 || ((x-12)/2.1)**2+((z-1.8)/1.4)**2<1) return false;
+  if (!Number.isFinite(x) || !Number.isFinite(z) || x < townBounds.minX || x > townBounds.maxX || z < townBounds.minZ || z > townBounds.maxZ) return false;
+  if (Math.hypot(x,z)<1.65 || townPonds.some(p => ((x-p.x)/(p.rx+0.3))**2+((z-p.z)/(p.rz+0.35))**2<1)) return false;
   return !townObstacles.some(([cx,cz,w,d]) => Math.abs(x-cx)<w/2+0.35 && Math.abs(z-cz)<d/2+0.35);
 }
 export function walkStep(x: number, z: number, dx: number, dz: number) {

@@ -5,7 +5,8 @@ import { Html, OrbitControls } from "@react-three/drei";
 import type { OrbitControls as Controls } from "three-stdlib";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { places, placeFor, residentOffset, type TownResident, type PlaceId } from "@/lib/jolly-town-shared";
+import { places, placeFor, residentOffset, spawnPosition, walkable, type TownResident, type PlaceId } from "@/lib/jolly-town-shared";
+import { townBuildings, townLand, townRoads, townTrees, townPonds } from "@/lib/jolly-town-layout";
 import { JollyPlush } from "./JollyPlush";
 import type { TownMotion } from "./useTownMovement";
 import styles from "./JollyTown.module.css";
@@ -39,15 +40,21 @@ function buildCity() {
     }
     box("#4c6570", x, 0.64, z + d / 2 + 0.025, 0.6, 0.95, 0.05);
   }
-  box("#d6c7aa", 0, -0.65, 0, 33, 1.3, 31);
-  box("#e9e2d3", 0, 0.015, 0, 32.7, 0.13, 30.7);
-  box("#aac6a2", 0, 0.09, 0, 30.8, 0.12, 28.8);
-  // A walkable street grid around the six neighborhoods.
-  for (const x of [-5, 5]) box("#809194", x, 0.17, 0, 1.8, 0.06, 28);
-  for (const z of [-3, 7]) box("#809194", 0, 0.17, z, 31, 0.06, 1.8);
-  for (const x of [-5, 5]) for (let z = -13; z < 14; z += 1.5) box("#e8e5d6", x, 0.205, z, 0.055, 0.015, 0.55);
-  for (const z of [-3, 7]) for (let x = -14; x < 15; x += 1.5) box("#e8e5d6", x, 0.205, z, 0.55, 0.015, 0.055);
-  for (const x of [-5, 5]) for (const z of [-3, 7]) for (let i = -2; i <= 2; i++) {
+  box("#d6c7aa", 0, -0.65, townLand.z, townLand.width, 1.3, townLand.depth);
+  box("#e9e2d3", 0, 0.015, townLand.z, townLand.width - 0.3, 0.13, townLand.depth - 0.3);
+  box("#aac6a2", 0, 0.09, townLand.z, townLand.width - 2.2, 0.12, townLand.depth - 2.2);
+  // Connected avenues lead from the old center into the new outer districts.
+  for (const x of townRoads.x) {
+    box("#e9dfc9", x, 0.14, townLand.z, 2.6, 0.05, 46.4);
+    box("#809194", x, 0.17, townLand.z, 1.8, 0.06, 46.4);
+    for (let z = -31; z < 14; z += 1.5) box("#e8e5d6", x, 0.205, z, 0.055, 0.015, 0.55);
+  }
+  for (const z of townRoads.z) {
+    box("#e9dfc9", 0, 0.14, z, 58.8, 0.05, 2.6);
+    box("#809194", 0, 0.17, z, 58.8, 0.06, 1.8);
+    for (let x = -28; x < 29; x += 1.5) box("#e8e5d6", x, 0.205, z, 0.55, 0.015, 0.055);
+  }
+  for (const x of townRoads.x) for (const z of townRoads.z) for (let i = -2; i <= 2; i++) {
     box("#f8f2dc", x + i * 0.25, 0.22, z + 1.15, 0.14, 0.02, 0.55);
     box("#f8f2dc", x + 1.15, 0.22, z + i * 0.25, 0.55, 0.02, 0.14);
   }
@@ -60,35 +67,37 @@ function buildCity() {
   add("#e8dcc7", new THREE.CylinderGeometry(0.16, 0.28, 1.25, 16), 0, 1.07, 0);
   add("#dbcdb8", new THREE.CylinderGeometry(0.7, 0.27, 0.17, 32), 0, 1.5, 0);
   ball("#b1e0df", 0, 1.7, 0, 0.23);
-  building(-10, -10.5, 3.2, 2.7, 5.3, "#e2cbbb");
-  building(-13.7, -7, 2.5, 2.5, 3.4, "#b8cdd1", true);
-  building(-8.8, -6.3, 2.8, 2, 3, "#c2bed8");
-  building(-1.8, -10, 3, 3, 7.2, "#c8d9db");
-  building(2, -9.5, 2.5, 2.8, 5.4, "#e1d7c7");
-  building(9, -11, 3, 2.6, 3.5, "#e6cdad", true);
-  building(13, -8.5, 2.5, 2.5, 4.7, "#d5c7d4");
-  building(9, -6.5, 2.5, 1.8, 2.4, "#e9d6b4", true);
-  building(-12.5, 1.3, 3.2, 2.5, 2.15, "#e3baa4", true);
+  for (const [x,z,w,d,h,color,roof] of townBuildings) building(x,z,w,d,h,color,roof);
   // Café awning and outdoor tables.
   for (let i = 0; i < 8; i++) box(i % 2 ? "#e9a893" : "#fff3df", -13.9 + i * 0.4, 1.6, 3, 0.4, 0.12, 1.3);
   for (const x of [-12.8, -10.6]) {
     add("#c19670", new THREE.CylinderGeometry(0.35, 0.35, 0.09, 20), x, 0.7, 4.6);
     box("#86745f", x, 0.4, 4.6, 0.08, 0.6, 0.08);
   }
-  building(-12.7, 11, 3, 2.5, 3.2, "#bbcad1");
-  building(-8.5, 11.5, 2.5, 2.5, 2.6, "#e7c4b8", true);
-  building(12.4, 11, 3.2, 3, 3.5, "#c8d2ba", true);
-  building(8.2, 11.7, 2.6, 2.4, 2.5, "#dfc5b8");
   // Garden pond and winding stepping stones.
-  add("#86bdca", new THREE.CylinderGeometry(1.3, 1.3, 0.07, 32).scale(1.4, 1, 0.8), 12, 0.23, 1.8);
+  for (const pond of townPonds) add("#86bdca", new THREE.CylinderGeometry(1, 1, 0.07, 32).scale(pond.rx, 1, pond.rz), pond.x, 0.23, pond.z);
   for (let i = 0; i < 7; i++) add("#e4dcc9", new THREE.CylinderGeometry(0.28, 0.28, 0.08, 12), 10 + Math.sin(i) * 0.4, 0.25, i * 0.55);
-  for (const [x, z] of [[-14,-12],[-12,-4],[-7,-12],[-2,-5],[2,-5],[-3,3],[3,3],[-3,5],[3,5],[7,-12],[14,-12],[13,-4],[14,0],[14,4],[11,5],[7,1],[7,5],[-14,6],[-8,5],[-14,13],[-6,13],[6,13],[14,13]]) tree(x, z, 0.8 + Math.abs(x % 3) * 0.15, x > 6 && z > -4 && z < 7);
+  for (const [x,z] of townTrees) tree(x,z,0.8 + Math.abs(x % 3) * 0.15,x > 18 || (x > 6 && z > -4 && z < 7));
+  // A copper dome crowns the observatory; the courtyard remains open to walkers.
+  add("#90aaa9", new THREE.SphereGeometry(1.65,24,12,0,Math.PI*2,0,Math.PI/2),0,3.8,-26.8);
+  box("#e8dcc7",0,5.3,-26.8,0.12,0.7,0.12);
+  ball("#f5dfac",0,5.7,-26.8,0.18);
+  // Striped market awnings and lanterns over the western lane.
+  for (const [x,z,color] of [[-26,-7,"#e9a893"],[-21.5,-8,"#a8c9b4"]] as const) {
+    for(let i=0;i<6;i++) box(i%2 ? color : "#fff3df",x-1.1+i*0.4,1.65,z+0.8,0.4,0.12,1.2);
+  }
+  for (let x=-27;x<=-18;x+=1.5) {
+    ball("#f5cf9c",x,2.7,-4.4,0.13);
+    box("#86745f",x,2.86,-4.4,1.5,0.025,0.025);
+  }
+  for (const x of [-27.5,-17.5]) box("#86745f",x,1.55,-4.4,0.08,2.7,0.08);
+
   for (const x of [-3.2, 3.2]) for (const z of [-1, 4.5]) {
     box("#ba9874", x, 0.5, z, 1.15, 0.14, 0.45);
     box("#ba9874", x, 0.82, z - 0.18, 1.15, 0.35, 0.07);
     for (const dx of [-0.4, 0.4]) box("#697977", x + dx, 0.3, z, 0.06, 0.35, 0.3);
   }
-  for (const x of [-6.25, 6.25]) for (const z of [-10, -1, 5, 11]) {
+  for (const x of [-17.25, -6.25, 6.25, 17.25]) for (const z of [-26, -19, -10, -1, 5, 11]) {
     box("#647d7b", x, 1.1, z, 0.055, 1.9, 0.055);
     ball("#ffedbf", x, 2.1, z, 0.16);
   }
@@ -111,8 +120,8 @@ function City() {
 function Neighbor({ resident, selected, onSelect, speaking, speechLevel, reduced, motion, mine }: { resident: TownResident; selected: boolean; onSelect: () => void; speaking: boolean; speechLevel: RefObject<number>; reduced: boolean; motion:TownMotion; mine:boolean }) {
   const root = useRef<THREE.Group>(null), silent = useRef(0);
   const character=useRef<THREE.Group>(null),gait=useRef({moving:false});
-  const p = placeFor(resident.place), offset = residentOffset(resident.id);
-  const initial = useRef<[number,number,number]>([p.x + offset[0], 0.91, p.z + offset[1]]);
+  const p = spawnPosition(resident.id,resident.place), offset = residentOffset(resident.id);
+  const initial = useRef<[number,number,number]>([p.x, 0.91, p.z]);
   useFrame(({ clock }, delta) => {
     if (!root.current) return;
     const live=mine?motion.local.current:motion.poses.current.get(resident.id);
@@ -125,8 +134,9 @@ function Neighbor({ resident, selected, onSelect, speaking, speechLevel, reduced
       return;
     }
     const wander = resident.kind === "agent" && !selected && !reduced ? Math.sin(clock.elapsedTime * 0.18 + offset[0]) * 0.65 : 0;
-    root.current.position.x = THREE.MathUtils.damp(root.current.position.x, p.x + offset[0] + wander, 2.5, delta);
-    root.current.position.z = THREE.MathUtils.damp(root.current.position.z, p.z + offset[1], 2.5, delta);
+    const wanderX = walkable(p.x + wander,p.z) ? p.x + wander : p.x;
+    root.current.position.x = THREE.MathUtils.damp(root.current.position.x, wanderX, 2.5, delta);
+    root.current.position.z = THREE.MathUtils.damp(root.current.position.z, p.z, 2.5, delta);
   });
   return <group ref={root} position={initial.current} onClick={e => { e.stopPropagation(); onSelect(); }}>
     <group ref={character} scale={0.48} rotation={[0, 0.45, 0]}>
@@ -141,9 +151,10 @@ function CameraRig({ focus, zoom, reset, motion }: { focus: PlaceId | null; zoom
   const controls = useRef<Controls>(null);
   useEffect(() => {
     if (!controls.current) return;
-    const p = focus ? placeFor(focus) : { x: 0, z: 0 };
+    const p = focus ? placeFor(focus) : { x: 0, z: townLand.z };
     controls.current.target.set(p.x, 0, p.z);
-    const distance = focus ? 15 : 31;
+    const aspect = (controls.current.object as THREE.PerspectiveCamera).aspect || 1;
+    const distance = focus ? 15 : (aspect < 1 ? 80 : 55);
     controls.current.object.position.set(p.x + distance * 0.7, distance * 0.8, p.z + distance * 0.9);
     controls.current.update();
   }, [focus, reset]);
@@ -160,7 +171,7 @@ function CameraRig({ focus, zoom, reset, motion }: { focus: PlaceId | null; zoom
     }
   });
   useEffect(() => { if (zoom === lastZoom.current) return; if (controls.current) { const camera = controls.current.object; camera.position.sub(controls.current.target).multiplyScalar(zoom > lastZoom.current ? 0.8 : 1.25).add(controls.current.target); controls.current.update(); } lastZoom.current = zoom; }, [zoom]);
-  return <OrbitControls ref={controls} makeDefault minDistance={7} maxDistance={65} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2.2} enablePan={!motion.walking} enableDamping dampingFactor={0.08} />;
+  return <OrbitControls ref={controls} makeDefault minDistance={7} maxDistance={115} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2.2} enablePan={!motion.walking} enableDamping dampingFactor={0.08} />;
 }
 export default function JollyTownScene({ residents, selected, onSelect, onPlace, focus, zoom, reset, night, speaking, speechLevel, onFail, motion, meId }: { residents: TownResident[]; selected: string; onSelect: (id: string) => void; onPlace: (id: PlaceId) => void; focus: PlaceId | null; zoom: number; reset: number; night: boolean; speaking: boolean; speechLevel: RefObject<number>; onFail: () => void; motion:TownMotion; meId?:string }) {
   const reduced = useRef(false);
@@ -171,12 +182,12 @@ export default function JollyTownScene({ residents, selected, onSelect, onPlace,
     const nearby = residents.filter(r => !chosen.includes(r)).sort((a,b) => Number(b.kind === "member"&&b.online)*2-Number(a.kind === "member"&&a.online)*2+Number(b.place === focus)-Number(a.place === focus));
     return [...nearby.slice(0, mobile ? 10 : 22), ...chosen];
   }, [residents, selected, focus, mobile, meId]);
-  return <Canvas shadows dpr={[1,1.5]} camera={{ position: [22,25,31], fov: 43, near: 0.1, far: 160 }} gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: night ? 0.85 : 1.08 }} onCreated={({gl}) => { gl.domElement.addEventListener("webglcontextlost", onFail, { once: true }); }} aria-label="Interactive 3D Jolly Town. Drag to orbit, pinch or scroll to zoom.">
+  return <Canvas shadows dpr={[1,1.5]} camera={{ position: [38.5,44,40.5], fov: 43, near: 0.1, far: 240 }} gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: night ? 0.85 : 1.08 }} onCreated={({gl}) => { gl.domElement.addEventListener("webglcontextlost", onFail, { once: true }); }} aria-label="Interactive 3D Jolly Town. Drag to orbit, pinch or scroll to zoom.">
     <color attach="background" args={[night ? "#252a4b" : "#c9e2e3"]} />
-    <fog attach="fog" args={[night ? "#252a4b" : "#c9e2e3", 58, 115]} />
+    <fog attach="fog" args={[night ? "#252a4b" : "#c9e2e3", 110, 210]} />
     <ambientLight intensity={night ? 0.5 : 0.65} />
     <hemisphereLight color={night ? "#b7c1fc" : "#fff5e5"} groundColor="#9bbeb6" intensity={1.3} />
-    <directionalLight castShadow position={[-15,28,15]} intensity={night ? 1 : 3} color={night ? "#9ab8ff" : "#fff0d5"} shadow-mapSize={[2048,2048]} shadow-camera-left={-24} shadow-camera-right={24} shadow-camera-top={24} shadow-camera-bottom={-24} shadow-normalBias={0.05} shadow-bias={-0.0001} />
+    <directionalLight castShadow position={[-25,50,20]} intensity={night ? 1 : 3} color={night ? "#9ab8ff" : "#fff0d5"} shadow-mapSize={[2048,2048]} shadow-camera-left={-55} shadow-camera-right={55} shadow-camera-top={55} shadow-camera-bottom={-55} shadow-camera-far={130} shadow-normalBias={0.05} shadow-bias={-0.0001} />
     <mesh rotation={[-Math.PI/2,0,0]} position={[0,-0.5,0]} receiveShadow><planeGeometry args={[180,180]} /><meshStandardMaterial color={night ? "#3d6280" : "#9acbd4"} roughness={0.35} metalness={0.15} /></mesh>
     <City />
     {places.map(p => <Html key={p.id} position={[p.x,2.6,p.z]} center distanceFactor={43} zIndexRange={[10,1]}><button className={styles.placeTag} onClick={() => onPlace(p.id)}><span style={{color:p.color}}>{p.icon}</span>{p.name}</button></Html>)}

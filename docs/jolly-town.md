@@ -29,3 +29,9 @@ Run `node --import tsx scripts/test-jolly-town.ts` for signature, origin and hol
 The 3D view renders a limited set of neighbors for mobile performance; the map shows the loaded roster. This is an initial shared town, not a load-tested large-scale game server.
 
 Run `node --import tsx scripts/test-town-movement.ts` for safe spawns, walking boundaries, collision sliding and wall-tunneling checks.
+
+## Expanded layout
+
+The town contains 12 destinations over a 61 × 49 land footprint (previously 33 × 31). The movement boundary covers approximately 3.1 times the original area. Existing destinations, resident coordinates, and the harbor remain in place. Lantern Market, Storybook Library, Starlight Observatory, Sunrise Heights, Blossom Park, and Sunset Square extend the town north, east, and west.
+
+`lib/jolly-town-layout.ts` is the shared source for building footprints, streets, map coordinates, and movement bounds. The Places menu, joining form, visit API, nearest-place tracking, and guide context use the same destination catalog. No database migration is required. Static city meshes remain merged by material and the visible 3D resident limit is unchanged.

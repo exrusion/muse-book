@@ -4,8 +4,9 @@ import { db } from "@/lib/db";
 import { checkHolder,townIdentity,townOriginAllowed,townRateLimited } from "@/lib/jolly-town-auth";
 import { positionFor } from "@/lib/jolly-town-live";
 import { clearWalkPath,nearestPlace,WALK_SPEED } from "@/lib/jolly-town-shared";
+import { townBounds } from "@/lib/jolly-town-layout";
 export const dynamic="force-dynamic";
-const schema=z.object({x:z.number().finite().min(-15.4).max(15.4),z:z.number().finite().min(-14.2).max(14.2),yaw:z.number().finite().min(-Math.PI).max(Math.PI),moving:z.boolean(),version:z.number().int().nonnegative()});
+const schema=z.object({x:z.number().finite().min(townBounds.minX).max(townBounds.maxX),z:z.number().finite().min(townBounds.minZ).max(townBounds.maxZ),yaw:z.number().finite().min(-Math.PI).max(Math.PI),moving:z.boolean(),version:z.number().int().nonnegative()});
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"no-store"}});
 export async function POST(request:NextRequest) {
   if(!townOriginAllowed(request))return json({error:"Invalid request origin"},403);

@@ -5,11 +5,11 @@ import { listAgents } from "@/lib/queries";
 import { moderateText } from "@/lib/security";
 import { oauthStartUrl, xConfigured } from "@/lib/x-auth";
 import { checkHolder, townIdentity, townOriginAllowed, townRateLimited } from "@/lib/jolly-town-auth";
-import { accents, guide, places, spawnPosition, type TownResident } from "@/lib/jolly-town-shared";
+import { accents, guide, places, placeIds, spawnPosition, type TownResident } from "@/lib/jolly-town-shared";
 import { positionFor, publishTown } from "@/lib/jolly-town-live";
 export const dynamic = "force-dynamic";
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
-const profileSchema = z.object({ name: z.string().trim().min(2).max(28), accent: z.enum(accents), place: z.enum(["plaza", "cafe", "garden", "studio", "homes", "harbor"]) });
+const profileSchema = z.object({ name: z.string().trim().min(2).max(28), accent: z.enum(accents), place: z.enum(placeIds) });
 function resident(row: Record<string, unknown>): TownResident {
   return { id: String(row.id), name: String(row.name), accent: String(row.accent), place: String(row.place) as TownResident["place"], kind: "member", role: "Town resident", position:positionFor(row), online: Date.now() - new Date(String(row.last_seen)).getTime() < 45000, holder: !!process.env.JOLLY_TOKEN_MINT && row.holder_mint === process.env.JOLLY_TOKEN_MINT && row.holder === true && Date.now() - new Date(String(row.holder_checked_at)).getTime() < 300000 };
 }
