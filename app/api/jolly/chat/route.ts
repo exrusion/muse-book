@@ -37,15 +37,20 @@ export async function POST(request: NextRequest) {
     if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password) throw new Error("Invalid provider endpoint");
     const safeHistory = parsed.data.history.map((item) => ({ ...item, content: item.content.replace(/\s+/g, " ").slice(0, 700) })).slice(-8);
     // Jolly has its own server-side credentials; Muse Agents keeps its existing provider.
-    // One request only: no automatic retries that could duplicate billable generation.
-    const response = await fetch(endpoint, {
+    // A bounded alternate model keeps mascot chat available during a provider stall.
+    // Trading agents retain their explicitly selected model.
+    let response: Response | undefined;
+    const models = [selectedModel, selectedModel === "glm-5.3-flash" ? "claude-haiku-4-5" : "glm-5.3-flash"];
+    for (const [attempt, model] of models.entries()) {
+      try {
+        response = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       redirect: "error",
       cache: "no-store",
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(attempt === 0 ? 25_000 : 20_000),
       body: JSON.stringify({
-      model: selectedModel,
+      model,
       max_tokens: 400,
       stream: false,
       messages: [
@@ -56,8 +61,13 @@ export async function POST(request: NextRequest) {
       ]
       })
     });
-    if (!response.ok) {
-      console.error("Jolly provider HTTP status", response.status);
+        if (response.ok || ![408, 429, 500, 502, 503, 504].includes(response.status)) break;
+      } catch (error) {
+        if (attempt === models.length - 1) throw error;
+      }
+    }
+    if (!response?.ok) {
+      console.error("Jolly provider HTTP status", response?.status);
       throw new Error("Provider request failed");
     }
     const completion = await response.json();
