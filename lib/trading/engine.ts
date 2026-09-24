@@ -90,10 +90,13 @@ export async function tickAgent(id:string){
   await block(id,'Scanning for a Pons launch that meets your agent’s filters');
  });
 }
-export async function tradingCycle(){
+export async function tradingCycle(trace=false){
  await locked('jolly-trading-engine',async()=>{
+  if(trace)console.log('Jolly trading engine lock acquired');
   await db()`insert into jolly_trade_engine(key,value) values('heartbeat','{}') on conflict(key) do update set updated_at=now()`;
+  if(trace)console.log('Jolly trading heartbeat saved');
   const rows=await db()`select id,status from jolly_trade_agents a where status='running' or exists(select 1 from jolly_trade_positions p where p.agent_id=a.id and p.status='open') or exists(select 1 from jolly_trade_orders o where o.agent_id=a.id and o.status in ('preparing','signed','broadcast','review')) order by updated_at asc limit 30`;
+  if(trace)console.log('Jolly trading active accounts: '+rows.length);
   if(rows.some(a=>a.status==='running')){try{await scan();}catch{await db()`insert into jolly_trade_engine(key,value) values('scanner_status','{"ok":false}') on conflict(key) do update set value=excluded.value,updated_at=now()`;}}
   for(const row of rows){try{await tickAgent(row.id);}catch(e){if(e instanceof TradeError&&e.status===409)continue;await block(row.id,e instanceof TradeError?e.message:'Market or wallet service unavailable. New actions are waiting.');}}
   await db()`update jolly_trade_engine set updated_at=now() where key='heartbeat'`;
