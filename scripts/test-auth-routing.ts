@@ -5,7 +5,8 @@ for(const host of ['museagents.fun','jollybot.lol','www.jollybot.lol']){
  const origin='https://'+host;
  assert.equal(trustedRequestOrigin(new Request(origin+'/api/agents',{headers:{origin,host}}),app),origin);
 }
-for(const headers of [{origin:'https://evil.example',host:'jollybot.lol'},{origin:'https://jollybot.lol',host:'evil.example'},{origin:'https://museagents.fun',host:'jollybot.lol'},{host:'jollybot.lol'},{origin:'null',host:'jollybot.lol'}]){
+const rejected:Record<string,string>[]=[{origin:'https://evil.example',host:'jollybot.lol'},{origin:'https://jollybot.lol',host:'evil.example'},{origin:'https://museagents.fun',host:'jollybot.lol'},{host:'jollybot.lol'},{origin:'null',host:'jollybot.lol'}];
+for(const headers of rejected){
  assert.equal(trustedRequestOrigin(new Request('https://jollybot.lol/api/agents',{headers}),app),null);
 }
 assert.equal(flowDestination('jolly-agent:gpt',app).href,'https://jollybot.lol/create?brain=gpt');
