@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {parseEther} from 'viem';
+import {DEFAULT_SETTINGS,settingsSchema} from '../lib/trading/shared';
+import {entryBlock,exitReason,curveBuy,curveSell} from '../lib/trading/risk';
+import {withdrawalMessage} from '../lib/trading/withdrawal';
+const s={...DEFAULT_SETTINGS};
+const normal={cash:parseEther('0.05'),exposure:0n,dailySpend:0n,dailyPnl:0n,trades:0,positions:0,pending:false,fresh:true,gas:parseEther('0.003')};
+let count=0;
+function test(name:string,fn:()=>void){fn();count++;console.log('PASS '+name);}
+test('valid defaults and strict settings',()=>{assert(settingsSchema.safeParse(s).success);assert(!settingsSchema.safeParse({...s,privateKey:'forbidden'}).success);});
+test('negative, NaN, zero and excessive limits rejected',()=>{for(const tradeEth of ['-1','NaN','0','101','1e-3'])assert(!settingsSchema.safeParse({...s,tradeEth}).success);});
+test('trade cannot exceed allocation or daily buys',()=>{assert(!settingsSchema.safeParse({...s,tradeEth:'0.1'}).success);assert(!settingsSchema.safeParse({...s,dailySpendEth:'0.0001'}).success);});
+test('valid fresh entry allowed',()=>assert.equal(entryBlock(s,normal),null));
+test('pending transaction blocks competing order',()=>assert.match(entryBlock(s,{...normal,pending:true})!,/previous transaction/));
+test('stale market data blocks signing',()=>assert.match(entryBlock(s,{...normal,fresh:false})!,/fresh/));
+test('daily loss threshold includes unrealised losses supplied by accounting',()=>assert.match(entryBlock(s,{...normal,dailyPnl:-parseEther(s.dailyLossEth)})!,/loss/));
+test('position cap blocks new entries',()=>assert.match(entryBlock(s,{...normal,positions:2})!,/position/));
+test('trade count blocks repeated entries',()=>assert.match(entryBlock(s,{...normal,trades:10})!,/trade limit/));
+test('allocation uses cost basis, not depreciated marks',()=>assert.match(entryBlock(s,{...normal,exposure:parseEther('0.05')})!,/allocated/));
+test('daily buys cannot exceed remaining budget',()=>assert.match(entryBlock(s,{...normal,dailySpend:parseEther('0.0095')})!,/spending/));
+test('reserve cannot be consumed by trade',()=>assert.match(entryBlock(s,{...normal,cash:parseEther('0.0039')})!,/reserve/));
+test('stop-loss triggers exactly at threshold',()=>assert.equal(exitReason(s,1000n,900n,new Date()),'Stop loss'));
+test('take-profit and holding expiry',()=>{assert.equal(exitReason(s,1000n,1200n,new Date()),'Take profit');assert.equal(exitReason(s,1000n,1000n,new Date(Date.now()-61*60000)),'Maximum holding time');});
+test('quote round trip loses fees and cannot manufacture capital',()=>{for(const amount of [1n,1000n,10n**15n,10n**18n]){const q=20n*10n**18n,t=1000000000n*10n**18n;const bought=curveBuy(amount,q,t,300n);assert(bought<t);const sold=curveSell(bought,q+amount,t-bought,300n);assert(sold<=amount);}});
+test('invalid reserves and confiscatory fees produce no quote',()=>{assert.equal(curveBuy(100n,0n,100n,0n),0n);assert.equal(curveSell(100n,100n,100n,10000n),0n);});
+test('withdrawal signatures bind account, amount, recipient, nonce, expiry and chain',()=>{const args=['agent-a','0xabcdef','0.1','request-a',Date.now()+60000] as const;const m=withdrawalMessage(...args);assert(m.includes('4663'));assert.notEqual(m,withdrawalMessage('agent-b',args[1],args[2],args[3],args[4]));assert.notEqual(m,withdrawalMessage(args[0],args[1],'1',args[3],args[4]));assert.notEqual(m,withdrawalMessage(args[0],'0x123456',args[2],args[3],args[4]));});
+console.log(`${count} trading safeguards passed`);

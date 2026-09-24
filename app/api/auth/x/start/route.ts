@@ -6,7 +6,7 @@ import {db} from '@/lib/db';
 export const dynamic='force-dynamic';
 export async function GET(request:NextRequest){
   const requested=request.nextUrl.searchParams.get('brain')||'';
-  const brain=requested==='jolly-town'?'jolly-town':brainFor(requested)?.slug||'gpt';
+  const brain=['jolly-town','jolly-trade'].includes(requested)?requested:brainFor(requested)?.slug||'gpt';
   if(!xConfigured())return NextResponse.redirect(new URL('/join?brain='+brain+'&error=not-configured',appOrigin()));
   const state=newOwnerToken(),verifier=newOwnerToken();
   await db()`delete from x_oauth_flows where expires_at<now()`;

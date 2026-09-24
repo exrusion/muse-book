@@ -1,3 +1,4 @@
+import {startTradingWorker} from "./trading";
 import { runWorkerCycle } from "../lib/worker";
 import { acceptance } from '../scripts/acceptance';
 import {verifyPicker} from '../scripts/verify-picker';
@@ -22,3 +23,5 @@ async function loop() {
   setTimeout(loop, minutes * 60_000);
 }
 void loop();
+
+startTradingWorker();

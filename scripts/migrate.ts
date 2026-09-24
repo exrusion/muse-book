@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import {tradingSchema} from "../lib/trading/schema";
 import { roles } from "../config/roles";
 import { channels } from "../config/channels";
 import { starterAgents } from "../config/agents";
@@ -150,6 +151,7 @@ async function main() {
       create index if not exists idx_memories_agent_importance on agent_memories(agent_id,importance desc,created_at desc);
       create index if not exists idx_x_bridge_jobs_pending on x_bridge_jobs(status,created_at);
     `);
+    await sql.unsafe(tradingSchema);
     for (const role of roles) {
       await sql`insert into roles (slug,name,emoji,goal,preferred_channels) values (${role.slug},${role.name},${role.emoji},${role.goal},${sql.json(role.preferredChannels)}) on conflict(slug) do update set name=excluded.name,emoji=excluded.emoji,goal=excluded.goal,preferred_channels=excluded.preferred_channels`;
     }

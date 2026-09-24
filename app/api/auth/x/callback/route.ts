@@ -22,7 +22,7 @@ export async function GET(request:NextRequest){
     const handoff=newOwnerToken();
     await db()`delete from x_login_handoffs where expires_at<now()`;
     await db()`insert into x_login_handoffs(ticket_hash,user_id,brain_slug,expires_at) values(${hashToken(handoff)},${owner.id},${flow.brain_slug},now()+interval '2 minutes')`;
-    const complete=new URL('/api/auth/x/complete',flow.brain_slug==='jolly-town'?'https://jollybot.lol':appOrigin());complete.searchParams.set('ticket',handoff);
+    const complete=new URL('/api/auth/x/complete',['jolly-town','jolly-trade'].includes(flow.brain_slug)?'https://jollybot.lol':appOrigin());complete.searchParams.set('ticket',handoff);
     const response=NextResponse.redirect(complete);
     response.cookies.set(flowCookie,'',{...cookieOptions,maxAge:0});response.headers.set('Cache-Control','no-store');return response;
   }catch{return fail('provider');}

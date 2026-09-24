@@ -8,3 +8,5 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
 .hero-actions{flex-wrap:wrap}.button.jolly-button{border-color:#b9a5e6;background:#f4efff;color:#5a467b;gap:9px}.button.jolly-button:hover{background:#ede5ff}.jolly-button-face{width:25px;height:25px;display:grid;place-items:center;border-radius:9px;background:#eee2d0;color:#24212a;font-size:.7rem;letter-spacing:2px}.jolly-nav{color:#7659a4}.jolly-page{max-width:1324px}.jolly-intro{display:flex;align-items:end;justify-content:space-between;gap:30px;margin-bottom:24px}.jolly-intro h1{font-size:clamp(3.2rem,6vw,5.6rem);margin:8px 0 0}.jolly-intro p{max-width:510px;color:var(--muted);font-size:1rem;margin:0 0 12px}
 @media(max-width:760px){nav a.jolly-nav{display:inline;font-size:.78rem}.hero-actions .jolly-button{grid-column:1/-1}.jolly-intro{display:block}.jolly-intro p{margin-top:10px}}
+
+@media(max-width:760px){nav a.trading-nav{display:inline;font-size:.78rem}}
