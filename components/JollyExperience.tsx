@@ -165,7 +165,7 @@ export function JollyExperience() {
         {messages.length < 4 && <div className={styles.starters}>{starters.map((starter) => <button key={starter} type="button" onClick={() => void askJolly(starter)}>{starter}</button>)}</div>}
         <div className={styles.replyAudio}>
           <audio ref={voice.audioRef} preload="auto" hidden aria-label="Jolly’s spoken reply" />
-          {voice.canReplay && !voice.preparing && state !== "thinking" && <button type="button" disabled={voice.preparing || state === "thinking"} onClick={()=>{voiceEnabledRef.current=true;setVoiceEnabled(true);voice.replay();}}>{voice.error ? "Enable sound" : "↻ Replay reply"}</button>}
+          {voice.canReplay && !voice.preparing && state !== "thinking" && <button type="button" onClick={()=>{voiceEnabledRef.current=true;setVoiceEnabled(true);voice.replay();}}>{voice.error ? "Enable sound" : "↻ Replay reply"}</button>}
           {voice.error && <p role="status">{voice.error}</p>}
         </div>
         {error && <p className={styles.error}>{error}</p>}
