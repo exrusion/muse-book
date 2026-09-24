@@ -7,7 +7,8 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
   const [error, setError] = useState(""), [hasAudio, setHasAudio] = useState(false), [canReplay, setCanReplay] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const context = useRef<AudioContext | null>(null), analyserRef = useRef<AnalyserNode | null>(null);
-  const mediaSource = useRef<MediaElementAudioSourceNode | null>(null);
+  const bufferSource = useRef<AudioBufferSourceNode | null>(null);
+  const decoded = useRef<AudioBuffer | null>(null);
   const abort = useRef<AbortController | null>(null), sequence = useRef(0), frame = useRef(0), level = useRef(0);
   const objectUrl = useRef(""), latest = useRef<{ text: string; token?: string } | null>(null);
   const utterance = useRef<SpeechSynthesisUtterance | null>(null), speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -16,6 +17,7 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
   function finish() { cancelAnimationFrame(frame.current); level.current = 0; callback.current(false); }
   function stop() {
     sequence.current++; abort.current?.abort(); abort.current = null;
+    if (bufferSource.current) { bufferSource.current.onended = null; bufferSource.current.stop(); bufferSource.current.disconnect(); bufferSource.current = null; }
     audioRef.current?.pause();
     if (speechTimer.current) clearTimeout(speechTimer.current);
     if (utterance.current) { utterance.current.onstart = null; utterance.current.onend = null; utterance.current.onerror = null; }
@@ -39,12 +41,12 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
     const analyser = analyserRef.current, waveform = analyser ? new Uint8Array(analyser.fftSize) : null;
     const tick = () => {
       const audio = audioRef.current;
-      if (!audio || audio.paused || audio.ended) { finish(); return; }
+      if (!bufferSource.current && (!audio || audio.paused || audio.ended)) { finish(); return; }
       if (analyser && waveform) {
         analyser.getByteTimeDomainData(waveform);
         let power = 0; for (const sample of waveform) power += ((sample - 128) / 128) ** 2;
         level.current = Math.min(1, Math.sqrt(power / waveform.length) * 6);
-      } else level.current = 0.12 + Math.abs(Math.sin(audio.currentTime * 13)) * 0.3;
+      } else level.current = 0.12 + Math.abs(Math.sin((audio?.currentTime || 0) * 13)) * 0.3;
       frame.current = requestAnimationFrame(tick);
     };
     tick();
@@ -59,16 +61,18 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
       if (timer) clearTimeout(timer);
     }
     if (id !== sequence.current) return;
-    if (ctx?.state === "running" && !mediaSource.current) {
-      try {
-        const analyser = ctx.createAnalyser(); analyser.fftSize = 256;
-        const source = ctx.createMediaElementSource(audio);
-        source.connect(analyser); analyser.connect(ctx.destination);
-        mediaSource.current = source; analyserRef.current = analyser;
-      } catch { /* Keep native audio if analyser setup is unsupported. */ }
-    }
-    if (mediaSource.current && ctx?.state !== "running") {
-      setPreparing(false); setError("Tap Play reply to enable sound."); return;
+    if (ctx?.state === "running" && decoded.current) {
+      const source = ctx.createBufferSource(), analyser = ctx.createAnalyser();
+      analyser.fftSize = 256; source.buffer = decoded.current;
+      source.connect(analyser); analyser.connect(ctx.destination);
+      analyserRef.current?.disconnect(); analyserRef.current = analyser;
+      bufferSource.current = source;
+      source.onended = () => {
+        source.disconnect(); analyser.disconnect();
+        if (bufferSource.current === source) { bufferSource.current = null; finish(); }
+      };
+      source.start(); setPreparing(false); setError(""); callback.current(true); animate();
+      return;
     }
     try {
       audio.currentTime = 0;
@@ -102,7 +106,7 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
   async function speak(text: string, token?: string) {
     stop(); warmUp(); setError(""); setDeviceVoice(false); setHasAudio(false); setCanReplay(true);
     const id = sequence.current, clean = text.replace(/[*_#`]/g, "").replace(/https?:\/\/\S+/g, "the link").trim();
-    latest.current = { text: clean, token };
+    latest.current = { text: clean, token }; decoded.current = null;
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); objectUrl.current = "";
     const audio = audioRef.current; if (audio) { audio.removeAttribute("src"); audio.load(); }
     if (!token || !audio) { fallback(id, clean); return; }
@@ -114,6 +118,10 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
       if (!response.ok) throw new Error("Voice unavailable");
       const blob = await response.blob(); if (id !== sequence.current) return;
       objectUrl.current = URL.createObjectURL(blob); audio.src = objectUrl.current; audio.load(); setHasAudio(true);
+      if (context.current) {
+        try { const buffer = await context.current.decodeAudioData(await blob.arrayBuffer()); if (id !== sequence.current) return; decoded.current = buffer; }
+        catch { /* The native audio element remains available for unsupported codecs. */ }
+      }
       await play(id);
     } catch { if(id === sequence.current) fallback(id, clean); }
     finally { clearTimeout(timeout); if(id === sequence.current) abort.current = null; }
@@ -126,7 +134,7 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
   useEffect(() => {
     const audio = audioRef.current;
     const playing = () => {
-      if(mediaSource.current && context.current?.state !== "running") { audio?.pause(); setError("Tap Play reply to enable sound."); return; }
+      if (bufferSource.current) { bufferSource.current.onended = null; bufferSource.current.stop(); bufferSource.current.disconnect(); bufferSource.current = null; }
       setPreparing(false); setError(""); callback.current(true); animate();
     };
     const failed = () => { if(objectUrl.current) { finish(); setPreparing(false); setError("Audio could not play. Tap Play reply to try again."); } };
@@ -136,8 +144,10 @@ export function useJollyVoice(onSpeaking: (speaking: boolean) => void) {
       if(speechTimer.current) clearTimeout(speechTimer.current);
       audio?.removeEventListener("playing", playing); audio?.removeEventListener("pause", finish); audio?.removeEventListener("ended", finish); audio?.removeEventListener("error", failed); audio?.pause();
       if(utterance.current) { utterance.current.onstart = null; utterance.current.onend = null; utterance.current.onerror = null; }
-      window.speechSynthesis?.cancel(); mediaSource.current?.disconnect(); analyserRef.current?.disconnect();
-      mediaSource.current = null; analyserRef.current = null;
+      window.speechSynthesis?.cancel();
+      if (bufferSource.current) { bufferSource.current.onended = null; bufferSource.current.stop(); bufferSource.current.disconnect(); }
+      analyserRef.current?.disconnect();
+      bufferSource.current = null; decoded.current = null; analyserRef.current = null;
       void context.current?.close(); context.current = null;
       if(objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     };
